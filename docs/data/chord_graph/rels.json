@@ -1346,11 +1346,6 @@
     },
     {
         "source": 123,
-        "target": 10,
-        "type": "consumes"
-    },
-    {
-        "source": 123,
         "target": 2,
         "type": "consumes"
     },
@@ -1391,11 +1386,6 @@
     },
     {
         "source": 7,
-        "target": 123,
-        "type": "produces"
-    },
-    {
-        "source": 10,
         "target": 123,
         "type": "produces"
     },
