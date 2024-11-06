@@ -65,7 +65,6 @@ class extractous(BaseModule):
     }
 
     deps_pip = ["extractous"]
-
     scope_distance_modifier = 1
 
     async def setup(self):
@@ -91,10 +90,6 @@ class extractous(BaseModule):
                 parent=event,
             )
             await self.emit_event(raw_text_event)
-
-    async def finish(self):
-        del os.environ["SCARF_NO_ANALYTICS"]
-        return
 
 
 def extract_text(file_path):
@@ -131,28 +126,23 @@ def extract_text(file_path):
         ".xml",
     ]
 
-    print(f"EXCTRACTING {file_path}")
-
-    # If the file can be extracted with unstructured use its partition function or try and read it
+    # If the file can be extracted with extractous use its partition function or try and read it
     if any(file_path.lower().endswith(file_type) for file_type in extractable_file_types):
-        # try:
-        extractor = Extractor()
-        reader = extractor.extract_file(str(file_path))
+        try:
+            extractor = Extractor()
+            reader = extractor.extract_file(str(file_path))
 
-        result = ""
-        buffer = reader.read(4096)
-        while len(buffer) > 0:
-            result += buffer.decode("utf-8")
+            result = ""
             buffer = reader.read(4096)
+            while len(buffer) > 0:
+                result += buffer.decode("utf-8")
+                buffer = reader.read(4096)
 
-        print(f"RESULT: {result}")
+            return result.strip()
 
-        return result.strip()
-
-        # print(f"RESULT: {result}")
-        # except ValueError:
-        #     with open(file_path, "rb") as file:
-        #         return file.read().decode("utf-8", errors="ignore")
+        except Exception as e:
+            with open(file_path, "rb") as file:
+                return file.read().decode("utf-8", errors="ignore")
     else:
         with open(file_path, "rb") as file:
             return file.read().decode("utf-8", errors="ignore")
