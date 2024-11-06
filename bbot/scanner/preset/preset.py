@@ -275,12 +275,6 @@ class Preset:
         return self._target
 
     @property
-    def seeds(self):
-        if self._seeds is None:
-            raise ValueError("Cannot access target before preset is baked (use ._seeds instead)")
-        return self.target.seeds
-
-    @property
     def whitelist(self):
         if self._target is None:
             raise ValueError("Cannot access whitelist before preset is baked (use ._whitelist instead)")
@@ -759,11 +753,11 @@ class Preset:
 
         # scope
         if include_target:
-            target = sorted(self.target.seeds.inputs)
+            target = sorted(str(t.data) for t in self.target.seeds)
             whitelist = []
             if self.target.whitelist is not None:
-                whitelist = sorted(self.target.whitelist.inputs)
-            blacklist = sorted(self.target.blacklist.inputs)
+                whitelist = sorted(str(t.data) for t in self.target.whitelist)
+            blacklist = sorted(str(t.data) for t in self.target.blacklist)
             if target:
                 preset_dict["target"] = target
             if whitelist and whitelist != target:
