@@ -1,4 +1,3 @@
-import os
 from extractous import Extractor
 
 from bbot.modules.base import BaseModule
@@ -140,7 +139,7 @@ def extract_text(file_path):
 
             return result.strip()
 
-        except Exception as e:
+        except Exception:
             with open(file_path, "rb") as file:
                 return file.read().decode("utf-8", errors="ignore")
     else:
