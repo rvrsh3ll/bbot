@@ -926,10 +926,12 @@ def test_event_closest_host():
             {"path": "/tmp/asdf.txt", "description": "test", "severity": "HIGH"}, "VULNERABILITY", parent=event3
         )
 
+
 def test_event_magic():
     from bbot.core.helpers.libmagic import get_magic_info, get_compression
 
     import base64
+
     zip_base64 = "UEsDBAoDAAAAAOMmZ1lR4FaHBQAAAAUAAAAIAAAAYXNkZi50eHRhc2RmClBLAQI/AwoDAAAAAOMmZ1lR4FaHBQAAAAUAAAAIACQAAAAAAAAAIICkgQAAAABhc2RmLnR4dAoAIAAAAAAAAQAYAICi2B77MNsBgKLYHvsw2wGAotge+zDbAVBLBQYAAAAAAQABAFoAAAArAAAAAAA="
     zip_bytes = base64.b64decode(zip_base64)
     zip_file = Path("/tmp/.bbottestzipasdkfjalsdf.zip")

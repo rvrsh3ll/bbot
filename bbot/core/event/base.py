@@ -1544,6 +1544,7 @@ class FILESYSTEM(DictPathEvent):
         super().__init__(*args, **kwargs)
         # detect type of file content using magic
         from bbot.core.helpers.libmagic import get_magic_info, get_compression
+
         extension, mime_type, description, confidence = get_magic_info(self.data["path"])
         self.data["magic_extension"] = extension
         self.data["magic_mime_type"] = mime_type
