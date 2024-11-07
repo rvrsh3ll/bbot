@@ -1,3 +1,9 @@
+### 2.1.2
+- https://github.com/blacklanternsecurity/bbot/pull/1909
+
+### 2.1.1
+- https://github.com/blacklanternsecurity/bbot/pull/1885
+
 ### 2.1.0
 - https://github.com/blacklanternsecurity/bbot/pull/1724
 
