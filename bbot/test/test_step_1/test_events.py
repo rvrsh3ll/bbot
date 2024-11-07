@@ -925,3 +925,34 @@ def test_event_closest_host():
         vuln = scan.make_event(
             {"path": "/tmp/asdf.txt", "description": "test", "severity": "HIGH"}, "VULNERABILITY", parent=event3
         )
+
+def test_event_magic():
+    from bbot.core.helpers.libmagic import get_magic_info, get_compression
+
+    import base64
+    zip_base64 = "UEsDBAoDAAAAAOMmZ1lR4FaHBQAAAAUAAAAIAAAAYXNkZi50eHRhc2RmClBLAQI/AwoDAAAAAOMmZ1lR4FaHBQAAAAUAAAAIACQAAAAAAAAAIICkgQAAAABhc2RmLnR4dAoAIAAAAAAAAQAYAICi2B77MNsBgKLYHvsw2wGAotge+zDbAVBLBQYAAAAAAQABAFoAAAArAAAAAAA="
+    zip_bytes = base64.b64decode(zip_base64)
+    zip_file = Path("/tmp/.bbottestzipasdkfjalsdf.zip")
+    with open(zip_file, "wb") as f:
+        f.write(zip_bytes)
+
+    # test magic helpers
+    extension, mime_type, description, confidence = get_magic_info(zip_file)
+    assert extension == ".zip"
+    assert mime_type == "application/zip"
+    assert description == "PKZIP Archive file"
+    assert confidence > 0
+    assert get_compression(mime_type) == "zip"
+
+    # test filesystem event
+    scan = Scanner()
+    event = scan.make_event({"path": zip_file}, "FILESYSTEM", parent=scan.root_event)
+    assert event.data["magic_extension"] == ".zip"
+    assert event.data["magic_mime_type"] == "application/zip"
+    assert event.data["magic_description"] == "PKZIP Archive file"
+    assert event.data["magic_confidence"] > 0
+    assert event.data["compression"] == "zip"
+    assert "compressed" in event.tags
+    assert "zip-archive" in event.tags
+
+    zip_file.unlink()

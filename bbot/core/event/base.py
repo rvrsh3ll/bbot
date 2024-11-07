@@ -1540,7 +1540,21 @@ class WAF(DictHostEvent):
 
 
 class FILESYSTEM(DictPathEvent):
-    pass
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # detect type of file content using magic
+        from bbot.core.helpers.libmagic import get_magic_info, get_compression
+        extension, mime_type, description, confidence = get_magic_info(self.data["path"])
+        self.data["magic_extension"] = extension
+        self.data["magic_mime_type"] = mime_type
+        self.data["magic_description"] = description
+        self.data["magic_confidence"] = confidence
+        # detection compression
+        compression = get_compression(mime_type)
+        if compression:
+            self.add_tag("compressed")
+            self.add_tag(f"{compression}-archive")
+            self.data["compression"] = compression
 
 
 class RAW_DNS_RECORD(DictHostEvent, DnsEvent):
