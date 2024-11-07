@@ -503,12 +503,13 @@ class BaseEvent:
             for t in list(self.tags):
                 if t.startswith("distance-"):
                     self.remove_tag(t)
-            if scope_distance == 0:
-                self.add_tag("in-scope")
-                self.remove_tag("affiliate")
-            else:
-                self.remove_tag("in-scope")
-                self.add_tag(f"distance-{new_scope_distance}")
+            if self.host:
+                if scope_distance == 0:
+                    self.add_tag("in-scope")
+                    self.remove_tag("affiliate")
+                else:
+                    self.remove_tag("in-scope")
+                    self.add_tag(f"distance-{new_scope_distance}")
             self._scope_distance = new_scope_distance
             # apply recursively to parent events
             parent_scope_distance = getattr(self.parent, "scope_distance", None)
@@ -1018,20 +1019,21 @@ class ClosestHostEvent(DictHostEvent):
 class DictPathEvent(DictEvent):
     def sanitize_data(self, data):
         new_data = dict(data)
+        new_data["path"] = str(new_data["path"])
         file_blobs = getattr(self.scan, "_file_blobs", False)
         folder_blobs = getattr(self.scan, "_folder_blobs", False)
         blob = None
         try:
-            data_path = Path(data["path"])
-            if data_path.is_file():
+            self._data_path = Path(data["path"])
+            if self._data_path.is_file():
                 self.add_tag("file")
                 if file_blobs:
-                    with open(data_path, "rb") as file:
+                    with open(self._data_path, "rb") as file:
                         blob = file.read()
-            elif data_path.is_dir():
+            elif self._data_path.is_dir():
                 self.add_tag("folder")
                 if folder_blobs:
-                    blob = self._tar_directory(data_path)
+                    blob = self._tar_directory(self._data_path)
         except KeyError:
             pass
         if blob:
@@ -1542,20 +1544,21 @@ class WAF(DictHostEvent):
 class FILESYSTEM(DictPathEvent):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # detect type of file content using magic
-        from bbot.core.helpers.libmagic import get_magic_info, get_compression
+        if self._data_path.is_file():
+            # detect type of file content using magic
+            from bbot.core.helpers.libmagic import get_magic_info, get_compression
 
-        extension, mime_type, description, confidence = get_magic_info(self.data["path"])
-        self.data["magic_extension"] = extension
-        self.data["magic_mime_type"] = mime_type
-        self.data["magic_description"] = description
-        self.data["magic_confidence"] = confidence
-        # detection compression
-        compression = get_compression(mime_type)
-        if compression:
-            self.add_tag("compressed")
-            self.add_tag(f"{compression}-archive")
-            self.data["compression"] = compression
+            extension, mime_type, description, confidence = get_magic_info(self.data["path"])
+            self.data["magic_extension"] = extension
+            self.data["magic_mime_type"] = mime_type
+            self.data["magic_description"] = description
+            self.data["magic_confidence"] = confidence
+            # detection compression
+            compression = get_compression(mime_type)
+            if compression:
+                self.add_tag("compressed")
+                self.add_tag(f"{compression}-archive")
+                self.data["compression"] = compression
 
 
 class RAW_DNS_RECORD(DictHostEvent, DnsEvent):

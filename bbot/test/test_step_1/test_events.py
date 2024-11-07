@@ -946,15 +946,23 @@ def test_event_magic():
     assert confidence > 0
     assert get_compression(mime_type) == "zip"
 
-    # test filesystem event
+    # test filesystem event - file
     scan = Scanner()
     event = scan.make_event({"path": zip_file}, "FILESYSTEM", parent=scan.root_event)
-    assert event.data["magic_extension"] == ".zip"
-    assert event.data["magic_mime_type"] == "application/zip"
-    assert event.data["magic_description"] == "PKZIP Archive file"
-    assert event.data["magic_confidence"] > 0
-    assert event.data["compression"] == "zip"
-    assert "compressed" in event.tags
-    assert "zip-archive" in event.tags
+    assert event.data == {
+        "path": "/tmp/.bbottestzipasdkfjalsdf.zip",
+        "magic_extension": ".zip",
+        "magic_mime_type": "application/zip",
+        "magic_description": "PKZIP Archive file",
+        "magic_confidence": 0.9,
+        "compression": "zip",
+    }
+    assert event.tags == {"file", "zip-archive", "compressed"}
+
+    # test filesystem event - folder
+    scan = Scanner()
+    event = scan.make_event({"path": "/tmp"}, "FILESYSTEM", parent=scan.root_event)
+    assert event.data == {"path": "/tmp"}
+    assert event.tags == {"folder"}
 
     zip_file.unlink()
