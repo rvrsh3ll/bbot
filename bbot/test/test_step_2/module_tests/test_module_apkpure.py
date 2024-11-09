@@ -37,6 +37,10 @@ class TestAPKPure(ModuleTestBase):
         module_test.httpx_mock.add_response(
             url="https://d.apkpure.com/b/XAPK/com.bbot.test?version=latest",
             content=self.apk_file,
+            headers={
+                "Content-Type": "application/vnd.android.package-archive",
+                "Content-Disposition": "attachment; filename=com.bbot.test.apk",
+            },
         )
 
     def check(self, module_test, events):
@@ -61,9 +65,7 @@ class TestAPKPure(ModuleTestBase):
                 and e.data["url"] == "https://play.google.com/store/apps/details?id=com.bbot.test"
             ]
         ), "Failed to find bbot android app"
-        filesystem_event = [
-            e for e in events if e.type == "FILESYSTEM" and "com.bbot.test.xapk" in e.data["path"] and "apk" in e.tags
-        ]
+        filesystem_event = [e for e in events if e.type == "FILESYSTEM" and "com.bbot.test.apk" in e.data["path"]]
         assert 1 == len(filesystem_event), "Failed to download apk"
         file = Path(filesystem_event[0].data["path"])
-        assert file.is_file(), "Destination xapk doesn't exist"
+        assert file.is_file(), "Destination apk doesn't exist"

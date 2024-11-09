@@ -40,7 +40,7 @@ class TestJadx(ModuleTestBase):
             content=self.apk_file,
             headers={
                 "Content-Type": "application/vnd.android.package-archive",
-                "Content-Disposition": "attachment; filename=com.bbot.test.xapk",
+                "Content-Disposition": "attachment; filename=com.bbot.test.apk",
             },
         )
 
@@ -48,7 +48,7 @@ class TestJadx(ModuleTestBase):
         filesystem_events = [e for e in events if e.type == "FILESYSTEM"]
         apk_event = [e for e in filesystem_events if "file" in e.tags]
         extension, mime_type, description, confidence = get_magic_info(apk_event[0].data["path"])
-        assert description == "Android application package", f"Downloaded file was detected as {description}"
+        assert description == "Android Application Package", f"Downloaded file was detected as {description}"
         extract_event = [e for e in filesystem_events if "folder" in e.tags]
         assert 1 == len(extract_event), "Failed to extract apk"
         extract_path = Path(extract_event[0].data["path"])

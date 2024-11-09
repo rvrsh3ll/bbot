@@ -67,7 +67,7 @@ class jadx(BaseModule):
     async def filter_event(self, event):
         if "file" in event.tags:
             if not event.data["magic_description"].lower() in self.allowed_file_types:
-                return False, f"Jadx is not able to decompile this file type"
+                return False, f"Jadx is not able to decompile this file type: {event.data['magic_description']}"
         else:
             return False, "Event is not a file"
         return True
