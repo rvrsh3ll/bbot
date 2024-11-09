@@ -33,7 +33,7 @@ class jadx(BaseModule):
         },
         {
             "name": "Install latest JRE (Fedora)",
-            "package": {"name": ["java-openjdk-headless"], "state": "present"},
+            "package": {"name": ["java-latest-openjdk"], "state": "present"},
             "become": True,
             "when": "ansible_facts['os_family'] == 'RedHat'",
         },
