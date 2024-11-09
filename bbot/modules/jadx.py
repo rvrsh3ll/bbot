@@ -38,6 +38,18 @@ class jadx(BaseModule):
             "when": "ansible_facts['os_family'] == 'RedHat'",
         },
         {
+            "name": "Set JAVA_HOME (Fedora)",
+            "command": "echo \"export JAVA_HOME=$(readlink -f /usr/bin/java | sed 's:bin/java::')\" >> ~/.bashrc",
+            "become": True,
+            "when": "ansible_facts['os_family'] == 'RedHat'",
+        },
+        {
+            "name": "Use JAVA_HOME (Fedora)",
+            "command": "source ~/.bashrc",
+            "become": True,
+            "when": "ansible_facts['os_family'] == 'RedHat'",
+        },
+        {
             "name": "Install latest JRE (Alpine)",
             "package": {"name": ["openjdk11"], "state": "present"},
             "become": True,
