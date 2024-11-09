@@ -1,5 +1,6 @@
 from pathlib import Path
-from .base import ModuleTestBase, tempapkfile
+from bbot.core.helpers.libmagic import get_magic_info
+from bbot.test.test_step_2.module_tests.base import ModuleTestBase, tempapkfile
 
 
 class TestJadx(ModuleTestBase):
@@ -37,14 +38,18 @@ class TestJadx(ModuleTestBase):
         module_test.httpx_mock.add_response(
             url="https://d.apkpure.com/b/XAPK/com.bbot.test?version=latest",
             content=self.apk_file,
+            headers={
+                "Content-Type": "application/vnd.android.package-archive",
+                "Content-Disposition": "attachment; filename=com.bbot.test.xapk",
+            },
         )
 
     def check(self, module_test, events):
-        extract_event = [
-            e
-            for e in events
-            if e.type == "FILESYSTEM" and "com_bbot_test_xapk" in e.data["path"] and "folder" in e.tags
-        ]
+        filesystem_events = [e for e in events if e.type == "FILESYSTEM"]
+        apk_event = [e for e in filesystem_events if "file" in e.tags]
+        extension, mime_type, description, confidence = get_magic_info(apk_event[0].data["path"])
+        assert description == "Android application package", f"Downloaded file was detected as {description}"
+        extract_event = [e for e in filesystem_events if "folder" in e.tags]
         assert 1 == len(extract_event), "Failed to extract apk"
         extract_path = Path(extract_event[0].data["path"])
         assert extract_path.is_dir(), "Destination apk doesn't exist"
