@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 from bbot.modules.base import BaseModule
 
@@ -49,11 +50,14 @@ class apkpure(BaseModule):
         if response:
             attachment = response.headers.get("Content-Disposition", "")
             if "filename" in attachment:
-                extension = attachment.split('filename="')[-1].split(".")[-1].strip('"')
-                content = response.content
-                file_destination = self.output_dir / app_id / f"{app_id}.{extension}"
-                with open(file_destination, "wb") as f:
-                    f.write(content)
-                self.info(f'Downloaded "{app_id}" from "{url}", saved to {file_destination}')
-                path = file_destination
+                match = re.search(r'filename="?([^"]+)"?', attachment)
+                if match:
+                    filename = match.group(1)
+                    extension = filename.split(".")[-1]
+                    content = response.content
+                    file_destination = self.output_dir / app_id / f"{app_id}.{extension}"
+                    with open(file_destination, "wb") as f:
+                        f.write(content)
+                    self.info(f'Downloaded "{app_id}" from "{url}", saved to {file_destination}')
+                    path = file_destination
         return path
