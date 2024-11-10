@@ -33,13 +33,17 @@ class jadx(BaseModule):
         },
         {
             "name": "Install latest JRE (Fedora)",
-            "package": {"name": ["java-latest-openjdk"], "state": "present"},
+            "package": {"name": ["java-latest-openjdk-headless"], "state": "present"},
             "become": True,
             "when": "ansible_facts['os_family'] == 'RedHat'",
         },
         {
             "name": "Set JAVA_HOME (Fedora)",
-            "lineinfile": {"path": "/etc/profile.d/java.sh", "line": "export JAVA_HOME=$(readlink -f /usr/bin/java | sed 's:bin/java::')", "create": True},
+            "lineinfile": {
+                "path": "/etc/profile.d/java.sh",
+                "line": "export JAVA_HOME=$(readlink -f /usr/bin/java | sed 's:bin/java::')",
+                "create": True,
+            },
             "become": True,
             "when": "ansible_facts['os_family'] == 'RedHat'",
         },
