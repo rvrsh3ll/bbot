@@ -39,13 +39,7 @@ class jadx(BaseModule):
         },
         {
             "name": "Set JAVA_HOME (Fedora)",
-            "command": "echo \"export JAVA_HOME=$(readlink -f /usr/bin/java | sed 's:bin/java::')\" >> ~/.bashrc",
-            "become": True,
-            "when": "ansible_facts['os_family'] == 'RedHat'",
-        },
-        {
-            "name": "Use JAVA_HOME (Fedora)",
-            "command": "source ~/.bashrc",
+            "lineinfile": {"path": "/etc/profile.d/java.sh", "line": "export JAVA_HOME=$(readlink -f /usr/bin/java | sed 's:bin/java::')", "create": True},
             "become": True,
             "when": "ansible_facts['os_family'] == 'RedHat'",
         },
