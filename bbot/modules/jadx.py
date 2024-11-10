@@ -38,16 +38,6 @@ class jadx(BaseModule):
             "when": "ansible_facts['os_family'] == 'RedHat'",
         },
         {
-            "name": "Set JAVA_HOME (Fedora)",
-            "lineinfile": {
-                "path": "/etc/profile.d/java.sh",
-                "line": "export JAVA_HOME=$(readlink -f /usr/bin/java | sed 's:bin/java::')",
-                "create": True,
-            },
-            "become": True,
-            "when": "ansible_facts['os_family'] == 'RedHat'",
-        },
-        {
             "name": "Install latest JRE (Alpine)",
             "package": {"name": ["openjdk11"], "state": "present"},
             "become": True,
@@ -65,6 +55,16 @@ class jadx(BaseModule):
                 "dest": "#{BBOT_TOOLS}/jadx",
                 "remote_src": True,
             },
+        },
+        {
+            "name": "Set JAVA_HOME (Fedora)",
+            "lineinfile": {
+                "path": "#{BBOT_TOOLS}/jadx/bin/jadx",
+                "line": "JAVA_HOME=/usr",
+                "insertafter": "BOF",
+            },
+            "become": True,
+            "when": "ansible_facts['os_family'] == 'RedHat'",
         },
     ]
 
