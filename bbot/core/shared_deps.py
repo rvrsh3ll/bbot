@@ -79,13 +79,23 @@ DEP_CHROMIUM = [
         "ignore_errors": True,
     },
     {
-        "name": "Install Chromium dependencies (Debian)",
+        "name": "Install Chromium dependencies (Ubuntu 24.04)",
+        "package": {
+            "name": "libasound2t64,libatk-bridge2.0-0,libatk1.0-0,libcairo2,libcups2,libdrm2,libgbm1,libnss3,libpango-1.0-0,libglib2.0-0,libxcomposite1,libxdamage1,libxfixes3,libxkbcommon0,libxrandr2",
+            "state": "present",
+        },
+        "become": True,
+        "when": "ansible_facts['distribution'] == 'Ubuntu' and ansible_facts['distribution_version'] == '24.04'",
+        "ignore_errors": True,
+    },
+    {
+        "name": "Install Chromium dependencies (Other Debian-based)",
         "package": {
             "name": "libatk-bridge2.0-0,libatk1.0-0,libcairo2,libcups2,libdrm2,libgbm1,libnss3,libpango-1.0-0,libglib2.0-0,libxcomposite1,libxdamage1,libxfixes3,libxkbcommon0,libxrandr2",
             "state": "present",
         },
         "become": True,
-        "when": "ansible_facts['os_family'] == 'Debian'",
+        "when": "ansible_facts['os_family'] == 'Debian' and not (ansible_facts['distribution'] == 'Ubuntu' and ansible_facts['distribution_version'] == '24.04')",
         "ignore_errors": True,
     },
     {
