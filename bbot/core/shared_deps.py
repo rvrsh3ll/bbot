@@ -91,7 +91,7 @@ DEP_CHROMIUM = [
     {
         "name": "Install Chromium dependencies (Other Debian-based)",
         "package": {
-            "name": "libatk-bridge2.0-0,libatk1.0-0,libcairo2,libcups2,libdrm2,libgbm1,libnss3,libpango-1.0-0,libglib2.0-0,libxcomposite1,libxdamage1,libxfixes3,libxkbcommon0,libxrandr2",
+            "name": "libasound2,libatk-bridge2.0-0,libatk1.0-0,libcairo2,libcups2,libdrm2,libgbm1,libnss3,libpango-1.0-0,libglib2.0-0,libxcomposite1,libxdamage1,libxfixes3,libxkbcommon0,libxrandr2",
             "state": "present",
         },
         "become": True,
