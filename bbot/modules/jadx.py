@@ -61,7 +61,7 @@ class jadx(BaseModule):
             "lineinfile": {
                 "path": "#{BBOT_TOOLS}/jadx/bin/jadx",
                 "line": "JAVA_HOME=/usr",
-                "insertafter": "BOF",
+                "insertafter": "^#!",
             },
             "become": True,
             "when": "ansible_facts['os_family'] == 'RedHat'",
