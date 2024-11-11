@@ -33,7 +33,7 @@ class jadx(BaseModule):
         },
         {
             "name": "Install latest JRE (Fedora)",
-            "package": {"name": ["java-latest-openjdk-headless"], "state": "present"},
+            "package": {"name": ["which", "java-latest-openjdk-headless"], "state": "present"},
             "become": True,
             "when": "ansible_facts['os_family'] == 'RedHat'",
         },
@@ -55,16 +55,6 @@ class jadx(BaseModule):
                 "dest": "#{BBOT_TOOLS}/jadx",
                 "remote_src": True,
             },
-        },
-        {
-            "name": "Set JAVA_HOME (Fedora)",
-            "lineinfile": {
-                "path": "#{BBOT_TOOLS}/jadx/bin/jadx",
-                "line": "JAVA_HOME=/usr",
-                "insertafter": "^#!",
-            },
-            "become": True,
-            "when": "ansible_facts['os_family'] == 'RedHat'",
         },
     ]
 
