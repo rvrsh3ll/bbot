@@ -18,31 +18,8 @@ class jadx(BaseModule):
     options_desc = {
         "threads": "Maximum jadx threads for extracting apk's, default: 4",
     }
+    deps_shared = ["java"]
     deps_ansible = [
-        {
-            "name": "Install latest JRE (Debian)",
-            "package": {"name": ["default-jre"], "state": "present"},
-            "become": True,
-            "when": "ansible_facts['os_family'] == 'Debian'",
-        },
-        {
-            "name": "Install latest JRE (Arch)",
-            "package": {"name": ["jre-openjdk"], "state": "present"},
-            "become": True,
-            "when": "ansible_facts['os_family'] == 'Archlinux'",
-        },
-        {
-            "name": "Install latest JRE (Fedora)",
-            "package": {"name": ["which", "java-latest-openjdk-headless"], "state": "present"},
-            "become": True,
-            "when": "ansible_facts['os_family'] == 'RedHat'",
-        },
-        {
-            "name": "Install latest JRE (Alpine)",
-            "package": {"name": ["openjdk11"], "state": "present"},
-            "become": True,
-            "when": "ansible_facts['os_family'] == 'Alpine'",
-        },
         {
             "name": "Create jadx directory",
             "file": {"path": "#{BBOT_TOOLS}/jadx", "state": "directory", "mode": "0755"},
