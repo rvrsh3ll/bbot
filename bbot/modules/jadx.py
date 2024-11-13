@@ -18,7 +18,7 @@ class jadx(BaseModule):
     options_desc = {
         "threads": "Maximum jadx threads for extracting apk's, default: 4",
     }
-    deps_shared = ["java"]
+    deps_common = ["java"]
     deps_ansible = [
         {
             "name": "Create jadx directory",
