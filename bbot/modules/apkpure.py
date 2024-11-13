@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 from bbot.modules.base import BaseModule
 
@@ -45,9 +46,18 @@ class apkpure(BaseModule):
         path = None
         url = f"https://d.apkpure.com/b/XAPK/{app_id}?version=latest"
         self.helpers.mkdir(self.output_dir / app_id)
-        file_destination = self.output_dir / app_id / f"{app_id}.xapk"
-        result = await self.helpers.download(url, warn=False, filename=file_destination)
-        if result:
-            self.info(f'Downloaded "{app_id}" from "{url}", saved to {file_destination}')
-            path = file_destination
+        response = await self.helpers.request(url, allow_redirects=True)
+        if response:
+            attachment = response.headers.get("Content-Disposition", "")
+            if "filename" in attachment:
+                match = re.search(r'filename="?([^"]+)"?', attachment)
+                if match:
+                    filename = match.group(1)
+                    extension = filename.split(".")[-1]
+                    content = response.content
+                    file_destination = self.output_dir / app_id / f"{app_id}.{extension}"
+                    with open(file_destination, "wb") as f:
+                        f.write(content)
+                    self.info(f'Downloaded "{app_id}" from "{url}", saved to {file_destination}')
+                    path = file_destination
         return path
