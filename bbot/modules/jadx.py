@@ -79,10 +79,9 @@ class jadx(BaseModule):
         try:
             output = await self.run_process(command, check=True)
         except CalledProcessError as e:
-            self.warning(f"Error decompiling {path}. STDERR: {repr(e.stderr)}")
+            self.warning(f"Error decompiling {path}. STDOUT: {e.stdout} STDERR: {repr(e.stderr)}")
             return False
-        if not Path(output_dir / "resources").exists() and not Path(output_dir / "sources").exists():
-            self.warning(f"JADX was unable to decompile {path}.")
-            self.warning(output)
+        if not (output_dir / "resources").exists() and not (output_dir / "sources").exists():
+            self.warning(f"JADX was unable to decompile {path}: (STDOUT: {output.stdout} STDERR: {output.stderr})")
             return False
         return True
