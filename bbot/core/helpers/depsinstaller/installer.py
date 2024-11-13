@@ -350,6 +350,7 @@ class DepsInstaller:
             "make": "make",
             "gcc": "gcc",
             "bash": "bash",
+            "which": "which",
         }
         for command, package_name in core_deps.items():
             if not self.parent_helper.which(command):
