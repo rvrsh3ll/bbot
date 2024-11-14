@@ -69,14 +69,14 @@ Presets:
 
 Modules:
   -m MODULE [MODULE ...], --modules MODULE [MODULE ...]
-                        Modules to enable. Choices: wpscan,crt,c99,credshed,gitlab,ajaxpro,pgp,trickest,ntlm,robots,postman_download,skymem,otx,rapiddns,bucket_firebase,shodan_dns,fingerprintx,internetdb,ip2location,columbus,bucket_azure,censys,binaryedge,github_org,wappalyzer,nuclei,ipneighbor,baddns_zone,telerik,url_manipulation,zoomeye,virustotal,myssl,builtwith,dnscaa,emailformat,oauth,bucket_amazon,sslcert,git,iis_shortnames,bucket_google,filedownload,bevigil,social,paramminer_headers,paramminer_cookies,digitorus,wafw00f,portscan,bufferoverrun,github_codesearch,gowitness,google_playstore,ipstack,code_repository,github_workflows,baddns_direct,secretsdb,chaos,azure_realm,affiliates,viewdns,dockerhub,subdomainradar,hunterio,dnscommonsrv,ffuf_shortnames,trufflehog,dotnetnuke,hunt,baddns,host_header,dastardly,vhost,docker_pull,paramminer_getparams,dnsdumpster,postman,httpx,bucket_digitalocean,bypass403,leakix,securitytrails,extractous,dnsbrute,ffuf,smuggler,asn,passivetotal,subdomaincenter,dnsbrute_mutations,wayback,newsletters,hackertarget,sitedossier,securitytxt,generic_ssrf,urlscan,badsecrets,dehashed,certspotter,fullhunt,anubisdb,apkpure,azure_tenant,git_clone,bucket_file_enum
+                        Modules to enable. Choices: filedownload,ffuf,bucket_google,newsletters,ipstack,sitedossier,bypass403,nuclei,hunt,azure_realm,builtwith,otx,paramminer_headers,dnscaa,bucket_amazon,extractous,bufferoverrun,ipneighbor,smuggler,github_codesearch,c99,dnscommonsrv,sslcert,code_repository,url_manipulation,gitlab,dnsbrute_mutations,oauth,anubisdb,viewdns,dnsdumpster,azure_tenant,fingerprintx,leakix,dotnetnuke,paramminer_getparams,vhost,urlscan,wpscan,trickest,social,postman,crt,bucket_file_enum,baddns_zone,rapiddns,credshed,subdomainradar,ajaxpro,secretsdb,internetdb,fullhunt,certspotter,censys,jadx,chaos,ntlm,iis_shortnames,wafw00f,dockerhub,bucket_azure,git,bucket_digitalocean,digitorus,hunterio,skymem,ip2location,github_workflows,baddns_direct,pgp,myssl,dehashed,portscan,securitytxt,generic_ssrf,ffuf_shortnames,httpx,virustotal,docker_pull,columbus,asn,telerik,paramminer_cookies,apkpure,git_clone,postman_download,hackertarget,affiliates,dastardly,robots,securitytrails,trufflehog,zoomeye,passivetotal,host_header,wayback,binaryedge,shodan_dns,subdomaincenter,emailformat,google_playstore,badsecrets,wappalyzer,dnsbrute,gowitness,bevigil,github_org,baddns,bucket_firebase
   -l, --list-modules    List available modules.
   -lmo, --list-module-options
                         Show all module config options
   -em MODULE [MODULE ...], --exclude-modules MODULE [MODULE ...]
                         Exclude these modules.
   -f FLAG [FLAG ...], --flags FLAG [FLAG ...]
-                        Enable modules by flag. Choices: web-screenshots,service-enum,deadly,portscan,code-enum,iis-shortnames,cloud-enum,web-thorough,safe,report,active,affiliates,web-paramminer,aggressive,baddns,subdomain-hijack,social-enum,subdomain-enum,email-enum,web-basic,slow,passive
+                        Enable modules by flag. Choices: web-screenshots,code-enum,iis-shortnames,subdomain-hijack,active,deadly,report,email-enum,web-thorough,web-basic,passive,portscan,service-enum,cloud-enum,safe,subdomain-enum,social-enum,baddns,web-paramminer,aggressive,affiliates,slow
   -lf, --list-flags     List available flags.
   -rf FLAG [FLAG ...], --require-flags FLAG [FLAG ...]
                         Only enable modules with these flags (e.g. -rf passive)
@@ -101,7 +101,7 @@ Output:
   -o DIR, --output-dir DIR
                         Directory to output scan results
   -om MODULE [MODULE ...], --output-modules MODULE [MODULE ...]
-                        Output module(s). Choices: websocket,neo4j,discord,splunk,json,csv,sqlite,http,python,subdomains,stdout,teams,asset_inventory,slack,web_report,txt,emails
+                        Output module(s). Choices: subdomains,python,http,neo4j,web_report,discord,emails,json,asset_inventory,websocket,sqlite,stdout,txt,teams,splunk,slack,csv
   --json, -j            Output scan data in JSON format
   --brief, -br          Output only the data itself
   --event-types EVENT_TYPES [EVENT_TYPES ...]
