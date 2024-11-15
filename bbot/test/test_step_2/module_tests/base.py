@@ -11,17 +11,6 @@ from bbot.core.helpers.misc import rand_string
 log = logging.getLogger("bbot.test.modules")
 
 
-def tempwordlist(content):
-    from bbot.core.helpers.misc import rand_string
-
-    filename = bbot_test_dir / f"{rand_string(8)}"
-    with open(filename, "w", errors="ignore") as f:
-        for c in content:
-            line = f"{c}\n"
-            f.write(line)
-    return filename
-
-
 class ModuleTestBase:
     targets = ["blacklanternsecurity.com"]
     scan_name = None
@@ -82,10 +71,10 @@ class ModuleTestBase:
         def set_expect_requests_handler(self, expect_args=None, request_handler=None):
             self.httpserver.expect_request(expect_args).respond_with_handler(request_handler)
 
-        async def mock_dns(self, mock_data, scan=None):
+        async def mock_dns(self, mock_data, custom_lookup_fn=None, scan=None):
             if scan is None:
                 scan = self.scan
-            await scan.helpers.dns._mock_dns(mock_data)
+            await scan.helpers.dns._mock_dns(mock_data, custom_lookup_fn=custom_lookup_fn)
 
         def mock_interactsh(self, name):
             from ...conftest import Interactsh_mock
@@ -100,6 +89,10 @@ class ModuleTestBase:
     async def module_test(
         self, httpx_mock, bbot_httpserver, bbot_httpserver_ssl, monkeypatch, request, caplog, capsys
     ):
+        # Skip dastardly test if we're in the distro tests (because dastardly uses docker)
+        if os.getenv("BBOT_DISTRO_TESTS") and self.name == "dastardly":
+            pytest.skip("Skipping module_test for dastardly module due to BBOT_DISTRO_TESTS environment variable")
+
         self.log.info(f"Starting {self.name} module test")
         module_test = self.ModuleTest(
             self, httpx_mock, bbot_httpserver, bbot_httpserver_ssl, monkeypatch, request, caplog, capsys

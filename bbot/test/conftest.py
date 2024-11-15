@@ -13,17 +13,31 @@ from bbot.core import CORE
 from bbot.core.helpers.misc import execute_sync_or_async
 from bbot.core.helpers.interactsh import server_list as interactsh_servers
 
+# silence stdout + trace
+root_logger = logging.getLogger()
+pytest_debug_file = Path(__file__).parent.parent.parent / "pytest_debug.log"
+print(f"pytest_debug_file: {pytest_debug_file}")
+debug_handler = logging.FileHandler(pytest_debug_file)
+debug_handler.setLevel(logging.DEBUG)
+debug_format = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s %(filename)s:%(lineno)s %(message)s")
+debug_handler.setFormatter(debug_format)
+root_logger.addHandler(debug_handler)
 
 test_config = OmegaConf.load(Path(__file__).parent / "test.conf")
-if test_config.get("debug", False):
-    os.environ["BBOT_DEBUG"] = "True"
-    logging.getLogger("bbot").setLevel(logging.DEBUG)
-    CORE.logger.log_level = logging.DEBUG
-else:
-    # silence stdout + trace
-    root_logger = logging.getLogger()
-    for h in root_logger.handlers:
-        h.addFilter(lambda x: x.levelname not in ("STDOUT", "TRACE"))
+
+os.environ["BBOT_DEBUG"] = "True"
+CORE.logger.log_level = logging.DEBUG
+
+# silence all stderr output:
+stderr_handler = CORE.logger.log_handlers["stderr"]
+stderr_handler.setLevel(logging.CRITICAL)
+handlers = list(CORE.logger.listener.handlers)
+handlers.remove(stderr_handler)
+CORE.logger.listener.handlers = tuple(handlers)
+
+for h in root_logger.handlers:
+    h.addFilter(lambda x: x.levelname not in ("STDOUT", "TRACE"))
+
 
 CORE.merge_default(test_config)
 
@@ -31,6 +45,13 @@ CORE.merge_default(test_config)
 @pytest.fixture
 def assert_all_responses_were_requested() -> bool:
     return False
+
+
+@pytest.fixture(autouse=True)
+def silence_live_logging():
+    for handler in logging.getLogger().handlers:
+        if type(handler).__name__ == "_LiveLoggingStreamHandler":
+            handler.setLevel(logging.CRITICAL)
 
 
 @pytest.fixture
@@ -202,20 +223,20 @@ def pytest_terminal_summary(terminalreporter, exitstatus, config):  # pragma: no
     errors = len(stats.get("error", []))
     failed = stats.get("failed", [])
 
-    print("\nTest Session Summary:")
-    print(f"Total tests run: {total_tests}")
-    print(
-        f"{GREEN}Passed: {passed}{RESET}, {RED}Failed: {len(failed)}{RESET}, {YELLOW}Skipped: {skipped}{RESET}, Errors: {errors}"
+    terminalreporter.write("\nTest Session Summary:")
+    terminalreporter.write(f"\nTotal tests run: {total_tests}")
+    terminalreporter.write(
+        f"\n{GREEN}Passed: {passed}{RESET}, {RED}Failed: {len(failed)}{RESET}, {YELLOW}Skipped: {skipped}{RESET}, Errors: {errors}"
     )
 
     if failed:
-        print(f"\n{RED}Detailed failed test report:{RESET}")
+        terminalreporter.write(f"\n{RED}Detailed failed test report:{RESET}")
         for item in failed:
             test_name = item.nodeid.split("::")[-1] if "::" in item.nodeid else item.nodeid
             file_and_line = f"{item.location[0]}:{item.location[1]}"  # File path and line number
-            print(f"{BLUE}Test Name: {test_name}{RESET} {CYAN}({file_and_line}){RESET}")
-            print(f"{RED}Location: {item.nodeid} at {item.location[0]}:{item.location[1]}{RESET}")
-            print(f"{RED}Failure details:\n{item.longreprtext}{RESET}")
+            terminalreporter.write(f"\n{BLUE}Test Name: {test_name}{RESET} {CYAN}({file_and_line}){RESET}")
+            terminalreporter.write(f"\n{RED}Location: {item.nodeid} at {item.location[0]}:{item.location[1]}{RESET}")
+            terminalreporter.write(f"\n{RED}Failure details:\n{item.longreprtext}{RESET}")
 
 
 # BELOW: debugging for frozen/hung tests

@@ -1,5 +1,5 @@
 import asyncio
-import sqlite3
+import aiosqlite
 import multiprocessing
 from pathlib import Path
 from contextlib import suppress
@@ -34,6 +34,7 @@ class gowitness(BaseModule):
         "idle_timeout": "Skip the current gowitness batch if it stalls for longer than this many seconds",
     }
     deps_common = ["chromium"]
+    deps_pip = ["aiosqlite"]
     deps_ansible = [
         {
             "name": "Download gowitness",
@@ -56,7 +57,7 @@ class gowitness(BaseModule):
         self.threads = self.config.get("threads", 0)
         if not self.threads:
             self.threads = default_thread_count
-        self.proxy = self.scan.config.get("http_proxy", "")
+        self.proxy = self.scan.web_config.get("http_proxy", "")
         self.resolution_x = self.config.get("resolution_x")
         self.resolution_y = self.config.get("resolution_y")
         self.visit_social = self.config.get("social", True)
@@ -72,7 +73,7 @@ class gowitness(BaseModule):
 
         # make sure we have a working chrome install
         chrome_test_pass = False
-        for binary in ("chrome", "chromium", custom_chrome_path):
+        for binary in ("chrome", "chromium", "chromium-browser", custom_chrome_path):
             binary_path = self.helpers.which(binary)
             if binary_path and Path(binary_path).is_file():
                 chrome_test_proc = await self.run_process([binary_path, "--version"])
@@ -136,11 +137,12 @@ class gowitness(BaseModule):
             return
 
         # emit web screenshots
-        for filename, screenshot in self.new_screenshots.items():
+        new_screenshots = await self.get_new_screenshots()
+        for filename, screenshot in new_screenshots.items():
             url = screenshot["url"]
             final_url = screenshot["final_url"]
             filename = self.screenshot_path / screenshot["filename"]
-            webscreenshot_data = {"filename": str(filename), "url": final_url}
+            webscreenshot_data = {"path": str(filename), "url": final_url}
             parent_event = event_dict[url]
             await self.emit_event(
                 webscreenshot_data,
@@ -150,7 +152,8 @@ class gowitness(BaseModule):
             )
 
         # emit URLs
-        for url, row in self.new_network_logs.items():
+        new_network_logs = await self.get_new_network_logs()
+        for url, row in new_network_logs.items():
             ip = row["ip"]
             status_code = row["status_code"]
             tags = [f"status-{status_code}", f"ip-{ip}", "spider-danger"]
@@ -168,7 +171,8 @@ class gowitness(BaseModule):
                 )
 
         # emit technologies
-        for _, row in self.new_technologies.items():
+        new_technologies = await self.get_new_technologies()
+        for _, row in new_technologies.items():
             parent_id = row["url_id"]
             parent_url = self.screenshots_taken[parent_id]
             parent_event = event_dict[parent_url]
@@ -207,59 +211,53 @@ class gowitness(BaseModule):
         command += ["--timeout", str(self.timeout)]
         return command
 
-    @property
-    def new_screenshots(self):
+    async def get_new_screenshots(self):
         screenshots = {}
         if self.db_path.is_file():
-            with sqlite3.connect(str(self.db_path)) as con:
-                con.row_factory = sqlite3.Row
+            async with aiosqlite.connect(str(self.db_path)) as con:
+                con.row_factory = aiosqlite.Row
                 con.text_factory = self.helpers.smart_decode
-                cur = con.cursor()
-                res = self.cur_execute(cur, "SELECT * FROM urls")
-                for row in res:
-                    row = dict(row)
-                    _id = row["id"]
-                    if _id not in self.screenshots_taken:
-                        self.screenshots_taken[_id] = row["url"]
-                        screenshots[_id] = row
+                async with con.execute("SELECT * FROM urls") as cur:
+                    async for row in cur:
+                        row = dict(row)
+                        _id = row["id"]
+                        if _id not in self.screenshots_taken:
+                            self.screenshots_taken[_id] = row["url"]
+                            screenshots[_id] = row
         return screenshots
 
-    @property
-    def new_network_logs(self):
+    async def get_new_network_logs(self):
         network_logs = dict()
         if self.db_path.is_file():
-            with sqlite3.connect(str(self.db_path)) as con:
-                con.row_factory = sqlite3.Row
-                cur = con.cursor()
-                res = self.cur_execute(cur, "SELECT * FROM network_logs")
-                for row in res:
-                    row = dict(row)
-                    url = row["final_url"]
-                    if url not in self.connections_logged:
-                        self.connections_logged.add(url)
-                        network_logs[url] = row
+            async with aiosqlite.connect(str(self.db_path)) as con:
+                con.row_factory = aiosqlite.Row
+                async with con.execute("SELECT * FROM network_logs") as cur:
+                    async for row in cur:
+                        row = dict(row)
+                        url = row["final_url"]
+                        if url not in self.connections_logged:
+                            self.connections_logged.add(url)
+                            network_logs[url] = row
         return network_logs
 
-    @property
-    def new_technologies(self):
+    async def get_new_technologies(self):
         technologies = dict()
         if self.db_path.is_file():
-            with sqlite3.connect(str(self.db_path)) as con:
-                con.row_factory = sqlite3.Row
-                cur = con.cursor()
-                res = self.cur_execute(cur, "SELECT * FROM technologies")
-                for row in res:
-                    _id = row["id"]
-                    if _id not in self.technologies_found:
-                        self.technologies_found.add(_id)
-                        row = dict(row)
-                        technologies[_id] = row
+            async with aiosqlite.connect(str(self.db_path)) as con:
+                con.row_factory = aiosqlite.Row
+                async with con.execute("SELECT * FROM technologies") as cur:
+                    async for row in cur:
+                        _id = row["id"]
+                        if _id not in self.technologies_found:
+                            self.technologies_found.add(_id)
+                            row = dict(row)
+                            technologies[_id] = row
         return technologies
 
-    def cur_execute(self, cur, query):
+    async def cur_execute(self, cur, query):
         try:
-            return cur.execute(query)
-        except sqlite3.OperationalError as e:
+            return await cur.execute(query)
+        except aiosqlite.OperationalError as e:
             self.warning(f"Error executing query: {query}: {e}")
             return []
 

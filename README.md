@@ -29,6 +29,9 @@ Passive API sources plus a recursive DNS brute-force with target-specific subdom
 ```bash
 # find subdomains of evilcorp.com
 bbot -t evilcorp.com -p subdomain-enum
+
+# passive sources only
+bbot -t evilcorp.com -p subdomain-enum -rf passive
 ```
 
 <!-- BBOT SUBDOMAIN-ENUM PRESET EXPANDABLE -->
@@ -52,13 +55,13 @@ config:
     threads: 25
     brute_threads: 1000
   # put your API keys here
-  modules:
-    github:
-      api_key: ""
-    chaos:
-      api_key: ""
-    securitytrails:
-      api_key: ""
+  # modules:
+  #   github:
+  #     api_key: ""
+  #   chaos:
+  #     api_key: ""
+  #   securitytrails:
+  #     api_key: ""
 
 ```
 
@@ -212,6 +215,7 @@ include:
   - paramminer
   - dirbust-light
   - web-screenshots
+  - baddns-thorough
 
 config:
   modules:
@@ -300,13 +304,17 @@ For more information, see [Targets](https://www.blacklanternsecurity.com/bbot/St
 
 Similar to Amass or Subfinder, BBOT supports API keys for various third-party services such as SecurityTrails, etc.
 
-The standard way to do this is to enter your API keys in **`~/.config/bbot/bbot.yml`**:
+The standard way to do this is to enter your API keys in **`~/.config/bbot/bbot.yml`**. Note that multiple API keys are allowed:
 ```yaml
 modules:
   shodan_dns:
     api_key: 4f41243847da693a4f356c0486114bc6
   c99:
-    api_key: 21a270d5f59c9b05813a72bb41707266
+    # multiple API keys
+    api_key:
+      - 21a270d5f59c9b05813a72bb41707266
+      - ea8f243d9885cf8ce9876a580224fd3c
+      - 5bc6ed268ab6488270e496d3183a1a27
   virustotal:
     api_key: dd5f0eee2e4a99b71a939bded450b246
   securitytrails:

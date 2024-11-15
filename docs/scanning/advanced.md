@@ -32,11 +32,19 @@ if __name__ == "__main__":
 
 <!-- BBOT HELP OUTPUT -->
 ```text
-usage: bbot [-h] [-t TARGET [TARGET ...]] [-w WHITELIST [WHITELIST ...]] [-b BLACKLIST [BLACKLIST ...]] [--strict-scope] [-p [PRESET ...]] [-c [CONFIG ...]] [-lp]
-               [-m MODULE [MODULE ...]] [-l] [-lmo] [-em MODULE [MODULE ...]] [-f FLAG [FLAG ...]] [-lf] [-rf FLAG [FLAG ...]] [-ef FLAG [FLAG ...]] [--allow-deadly] [-n SCAN_NAME] [-v]
-               [-d] [-s] [--force] [-y] [--dry-run] [--current-preset] [--current-preset-full] [-o DIR] [-om MODULE [MODULE ...]] [--json] [--brief]
-               [--event-types EVENT_TYPES [EVENT_TYPES ...]] [--no-deps | --force-deps | --retry-deps | --ignore-failed-deps | --install-all-deps] [--version]
-               [-H CUSTOM_HEADERS [CUSTOM_HEADERS ...]] [--custom-yara-rules CUSTOM_YARA_RULES]
+usage: bbot [-h] [-t TARGET [TARGET ...]] [-w WHITELIST [WHITELIST ...]]
+               [-b BLACKLIST [BLACKLIST ...]] [--strict-scope]
+               [-p [PRESET ...]] [-c [CONFIG ...]] [-lp]
+               [-m MODULE [MODULE ...]] [-l] [-lmo] [-em MODULE [MODULE ...]]
+               [-f FLAG [FLAG ...]] [-lf] [-rf FLAG [FLAG ...]]
+               [-ef FLAG [FLAG ...]] [--allow-deadly] [-n SCAN_NAME] [-v] [-d]
+               [-s] [--force] [-y] [--dry-run] [--current-preset]
+               [--current-preset-full] [-o DIR] [-om MODULE [MODULE ...]]
+               [--json] [--brief]
+               [--event-types EVENT_TYPES [EVENT_TYPES ...]]
+               [--no-deps | --force-deps | --retry-deps | --ignore-failed-deps | --install-all-deps]
+               [--version] [-H CUSTOM_HEADERS [CUSTOM_HEADERS ...]]
+               [--custom-yara-rules CUSTOM_YARA_RULES]
 
 Bighuge BLS OSINT Tool
 
@@ -61,14 +69,14 @@ Presets:
 
 Modules:
   -m MODULE [MODULE ...], --modules MODULE [MODULE ...]
-                        Modules to enable. Choices: viewdns,postman,baddns_zone,dehashed,bucket_file_enum,asn,generic_ssrf,github_codesearch,columbus,azure_realm,dotnetnuke,dockerhub,credshed,passivetotal,certspotter,builtwith,otx,ipneighbor,fingerprintx,oauth,robots,dnsbrute_mutations,httpx,paramminer_headers,digitorus,gitlab,hunt,hunterio,trufflehog,ffuf,nuclei,badsecrets,git,bucket_firebase,ffuf_shortnames,urlscan,docker_pull,ip2location,subdomaincenter,telerik,pgp,zoomeye,shodan_dns,trickest,dnscommonsrv,ntlm,myssl,internetdb,emailformat,dastardly,azure_tenant,github_workflows,crt,affiliates,wayback,ajaxpro,wafw00f,iis_shortnames,sslcert,chaos,newsletters,host_header,bucket_amazon,vhost,paramminer_cookies,virustotal,rapiddns,leakix,dnsbrute,baddns,url_manipulation,code_repository,smuggler,bevigil,paramminer_getparams,unstructured,skymem,securitytrails,sitedossier,git_clone,bucket_azure,bucket_google,bypass403,wpscan,dnsdumpster,wappalyzer,dnscaa,social,hackertarget,github_org,fullhunt,filedownload,binaryedge,gowitness,anubisdb,portscan,ipstack,secretsdb,c99,censys,bucket_digitalocean
+                        Modules to enable. Choices: robots,leakix,docker_pull,oauth,zoomeye,paramminer_cookies,virustotal,git_clone,shodan_dns,emailformat,azure_realm,fullhunt,ffuf,pgp,dastardly,smuggler,viewdns,dotnetnuke,ipstack,host_header,passivetotal,postman,ntlm,censys,hunt,dnscaa,nuclei,vhost,bufferoverrun,github_workflows,wappalyzer,dnsbrute_mutations,urlscan,baddns_zone,trickest,apkpure,generic_ssrf,httpx,internetdb,bucket_azure,crt,bucket_file_enum,bucket_firebase,digitorus,unstructured,code_repository,portscan,paramminer_getparams,baddns_direct,github_codesearch,builtwith,chaos,url_manipulation,otx,bypass403,dnsdumpster,ajaxpro,subdomainradar,iis_shortnames,affiliates,paramminer_headers,anubisdb,bucket_google,securitytxt,secretsdb,bucket_digitalocean,hackertarget,postman_download,securitytrails,hunterio,subdomaincenter,social,ip2location,credshed,dnscommonsrv,github_org,baddns,azure_tenant,dnsbrute,sslcert,myssl,binaryedge,filedownload,fingerprintx,ipneighbor,telerik,dockerhub,newsletters,gowitness,asn,rapiddns,ffuf_shortnames,dehashed,google_playstore,bucket_amazon,sitedossier,wpscan,trufflehog,badsecrets,gitlab,skymem,bevigil,git,columbus,certspotter,wafw00f,wayback,c99
   -l, --list-modules    List available modules.
   -lmo, --list-module-options
                         Show all module config options
   -em MODULE [MODULE ...], --exclude-modules MODULE [MODULE ...]
                         Exclude these modules.
   -f FLAG [FLAG ...], --flags FLAG [FLAG ...]
-                        Enable modules by flag. Choices: subdomain-hijack,web-paramminer,subdomain-enum,code-enum,cloud-enum,iis-shortnames,web-thorough,baddns,portscan,slow,social-enum,affiliates,safe,web-screenshots,deadly,report,web-basic,email-enum,active,service-enum,aggressive,passive
+                        Enable modules by flag. Choices: aggressive,subdomain-enum,iis-shortnames,code-enum,report,subdomain-hijack,affiliates,portscan,web-thorough,active,passive,deadly,baddns,email-enum,cloud-enum,slow,web-paramminer,service-enum,web-screenshots,social-enum,web-basic,safe
   -lf, --list-flags     List available flags.
   -rf FLAG [FLAG ...], --require-flags FLAG [FLAG ...]
                         Only enable modules with these flags (e.g. -rf passive)
@@ -93,7 +101,7 @@ Output:
   -o DIR, --output-dir DIR
                         Directory to output scan results
   -om MODULE [MODULE ...], --output-modules MODULE [MODULE ...]
-                        Output module(s). Choices: subdomains,emails,web_report,json,txt,websocket,slack,asset_inventory,neo4j,splunk,csv,stdout,http,python,discord,teams
+                        Output module(s). Choices: websocket,teams,slack,asset_inventory,neo4j,web_report,python,stdout,subdomains,json,http,emails,discord,csv,splunk,txt
   --json, -j            Output scan data in JSON format
   --brief, -br          Output only the data itself
   --event-types EVENT_TYPES [EVENT_TYPES ...]

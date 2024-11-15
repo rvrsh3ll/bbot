@@ -74,7 +74,7 @@ class Preset:
                 "1.2.3.0/24",
                 flags=["subdomain-enum"],
                 modules=["nuclei"],
-                config={"http_proxy": "http://127.0.0.1"}
+                config={"web": {"http_proxy": "http://127.0.0.1"}}
             )
         >>> scan = Scanner(preset=preset)
 
@@ -354,6 +354,9 @@ class Preset:
                 self._whitelist.update(other._whitelist)
         self._blacklist.update(other._blacklist)
         self.strict_scope = self.strict_scope or other.strict_scope
+
+        # module dirs
+        self.module_dirs = self.module_dirs.union(other.module_dirs)
 
         # log verbosity
         if other.silent:
@@ -731,6 +734,9 @@ class Preset:
         """
         preset_dict = {}
 
+        if self.description:
+            preset_dict["description"] = self.description
+
         # config
         if full_config:
             config = self.core.config
@@ -838,8 +844,6 @@ class Preset:
 
         if module in self.exclude_modules:
             reason = "the module has been excluded"
-            if raise_error:
-                raise ValidationError(f'Unable to add {module_type} module "{module}" because {reason}')
             return False, reason, {}
 
         module_flags = preloaded.get("flags", [])

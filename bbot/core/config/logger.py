@@ -5,6 +5,7 @@ from copy import copy
 import multiprocessing
 import logging.handlers
 from pathlib import Path
+from contextlib import suppress
 
 from ..helpers.misc import mkdir, error_and_exit
 from ...logger import colorize, loglevel_mapping
@@ -71,9 +72,35 @@ class BBOTLogger:
             # Start the QueueListener
             self.listener = logging.handlers.QueueListener(self.queue, *self.log_handlers.values())
             self.listener.start()
-            atexit.register(self.listener.stop)
+            atexit.register(self.cleanup_logging)
 
         self.log_level = logging.INFO
+
+    def cleanup_logging(self):
+        # Close the queue handler
+        with suppress(Exception):
+            self.queue_handler.close()
+
+        # Clean root logger
+        root_logger = logging.getLogger()
+        for handler in list(root_logger.handlers):
+            with suppress(Exception):
+                root_logger.removeHandler(handler)
+            with suppress(Exception):
+                handler.close()
+
+        # Clean all other loggers
+        for logger in logging.Logger.manager.loggerDict.values():
+            if hasattr(logger, "handlers"):  # Logger, not PlaceHolder
+                for handler in list(logger.handlers):
+                    with suppress(Exception):
+                        logger.removeHandler(handler)
+                    with suppress(Exception):
+                        handler.close()
+
+        # Stop queue listener
+        with suppress(Exception):
+            self.listener.stop()
 
     def setup_queue_handler(self, logging_queue=None, log_level=logging.DEBUG):
         if logging_queue is None:
