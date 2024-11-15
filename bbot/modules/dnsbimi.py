@@ -53,7 +53,7 @@ class dnsbimi(BaseModule):
     meta = {
         "description": "Check DNS_NAME's for BIMI records to find image and certificate hosting URL's",
         "author": "@colin-stubbs",
-        "created_date": "2024-08-26",
+        "created_date": "2024-11-15",
     }
     options = {
         "emit_raw_dns_records": False,
@@ -107,7 +107,11 @@ class dnsbimi(BaseModule):
                 for answer in raw_results:
                     if self.emit_raw_dns_records:
                         await self.emit_event(
-                            {"host": hostname, "type": rdtype, "answer": answer.to_text()},
+                            {
+                                "host": hostname,
+                                "type": rdtype,
+                                "answer": answer.to_text(),
+                            },
                             "RAW_DNS_RECORD",
                             parent=event,
                             tags=tags.append(f"{rdtype.lower()}-record"),
