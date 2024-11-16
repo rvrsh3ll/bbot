@@ -29,9 +29,6 @@ from bbot.core.helpers.dns.helpers import service_record
 
 import re
 
-
-bimi_common_selectors = ["default", "email", "mail", "bimi"]
-
 # Handle "v=BIMI1; l=; a=;" == RFC conformant explicit declination to publish, e.g. useful on a sub-domain if you don't want the sub-domain to have a BIMI logo, yet your registered domain does?
 # Handle "v=BIMI1; l=; a=" == RFC non-conformant explicit declination to publish
 # Handle "v=BIMI1; l=;" == RFC non-conformant explicit declination to publish
@@ -58,7 +55,7 @@ class dnsbimi(BaseModule):
     options = {
         "emit_raw_dns_records": False,
         "emit_urls": True,
-        "selectors": "",
+        "selectors": "default,email,mail,bimi",
     }
     options_desc = {
         "emit_raw_dns_records": "Emit RAW_DNS_RECORD events",
@@ -69,11 +66,7 @@ class dnsbimi(BaseModule):
     async def setup(self):
         self.emit_raw_dns_records = self.config.get("emit_raw_dns_records", False)
         self.emit_urls = self.config.get("emit_urls", True)
-
-        if self.config.get("selectors", "") != "":
-            self._selectors = self.config.get("selectors", "").replace(", ", ",").split(",")
-        else:
-            self._selectors = bimi_common_selectors
+        self._selectors = self.config.get("selectors", "").replace(", ", ",").split(",")
 
         return await super().setup()
 
@@ -93,11 +86,12 @@ class dnsbimi(BaseModule):
         return True
 
     async def inspectBIMI(self, event, domain):
+        parent_domain = self.helpers.parent_domain(event.data)
         rdtype = "TXT"
 
         for selector in self._selectors:
             tags = ["bimi-record", f"bimi-{selector}"]
-            hostname = f"{selector}._bimi.{domain}"
+            hostname = f"{selector}._bimi.{parent_domain}"
 
             r = await self.helpers.resolve_raw(hostname, type=rdtype)
 
