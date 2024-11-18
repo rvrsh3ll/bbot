@@ -248,7 +248,7 @@ class DepsInstaller:
         return success
 
     def ansible_run(self, tasks=None, module=None, args=None, ansible_args=None):
-        _ansible_args = {"ansible_connection": "local"}
+        _ansible_args = {"ansible_connection": "local", "ansible_python_interpreter": sys.executable}
         if ansible_args is not None:
             _ansible_args.update(ansible_args)
         module_args = None
@@ -350,6 +350,7 @@ class DepsInstaller:
             "make": "make",
             "gcc": "gcc",
             "bash": "bash",
+            "which": "which",
         }
         for command, package_name in core_deps.items():
             if not self.parent_helper.which(command):

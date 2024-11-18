@@ -1,9 +1,9 @@
-import os
+from extractous import Extractor
 
 from bbot.modules.base import BaseModule
 
 
-class unstructured(BaseModule):
+class extractous(BaseModule):
     watched_events = ["FILESYSTEM"]
     produced_events = ["RAW_TEXT"]
     flags = ["passive", "safe"]
@@ -63,15 +63,11 @@ class unstructured(BaseModule):
         "extensions": "File extensions to parse",
     }
 
-    deps_apt = ["libmagic-dev", "poppler-utils", "tesseract-ocr", "libreoffice", "pandoc"]
-    deps_pip = ["unstructured[all-docs]>=0.15.7,<1.0", "nltk>=3.9.0,<4.0"]
-
+    deps_pip = ["extractous"]
     scope_distance_modifier = 1
 
     async def setup(self):
         self.extensions = list(set([e.lower().strip(".") for e in self.config.get("extensions", [])]))
-        # Do not send user statistics to the unstructured library
-        os.environ["SCARF_NO_ANALYTICS"] = "true"
         return True
 
     async def filter_event(self, event):
@@ -85,6 +81,12 @@ class unstructured(BaseModule):
     async def handle_event(self, event):
         file_path = event.data["path"]
         content = await self.scan.helpers.run_in_executor_mp(extract_text, file_path)
+        if isinstance(content, tuple):
+            error, traceback = content
+            self.error(f"Error extracting text from {file_path}: {error}")
+            self.trace(traceback)
+            return
+
         if content:
             raw_text_event = self.make_event(
                 content,
@@ -94,55 +96,27 @@ class unstructured(BaseModule):
             )
             await self.emit_event(raw_text_event)
 
-    async def finish(self):
-        del os.environ["SCARF_NO_ANALYTICS"]
-        return
-
 
 def extract_text(file_path):
     """
-    extract_text Extracts plaintext from a document path using unstructured.
+    extract_text Extracts plaintext from a document path using extractous.
 
     :param file_path: The path of the file to extract text from.
     :return: ASCII-encoded plaintext extracted from the document.
     """
 
-    from unstructured.partition.auto import partition
+    try:
+        extractor = Extractor()
+        reader, metadata = extractor.extract_file(str(file_path))
 
-    unstructured_file_types = [
-        ".csv",
-        ".eml",
-        ".msg",
-        ".epub",
-        ".xlsx",
-        ".xls",
-        ".html",
-        ".htm",
-        ".md",
-        ".org",
-        ".odt",
-        ".pdf",
-        ".txt",
-        ".text",
-        ".log",
-        ".ppt",
-        ".pptx",
-        ".rst",
-        ".rtf",
-        ".tsv",
-        ".doc",
-        ".docx",
-        ".xml",
-    ]
+        result = ""
+        buffer = reader.read(4096)
+        while len(buffer) > 0:
+            result += buffer.decode("utf-8")
+            buffer = reader.read(4096)
 
-    # If the file can be extracted with unstructured use its partition function or try and read it
-    if any(file_path.lower().endswith(file_type) for file_type in unstructured_file_types):
-        try:
-            elements = partition(filename=file_path)
-            return "\n\n".join(element.text for element in elements)
-        except ValueError:
-            with open(file_path, "rb") as file:
-                return file.read().decode("utf-8", errors="ignore")
-    else:
-        with open(file_path, "rb") as file:
-            return file.read().decode("utf-8", errors="ignore")
+        return result.strip()
+    except Exception as e:
+        import traceback
+
+        return (str(e), traceback.format_exc())

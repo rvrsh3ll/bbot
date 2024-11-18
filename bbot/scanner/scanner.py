@@ -161,7 +161,7 @@ class Scanner:
                 tries += 1
         else:
             scan_name = str(self.preset.scan_name)
-        self.name = scan_name
+        self.name = scan_name.replace("/", "_")
 
         # make sure the preset has a description
         if not self.preset.description:

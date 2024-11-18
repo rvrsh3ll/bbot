@@ -376,6 +376,9 @@ class Preset:
         # misc
         self.force_start = self.force_start | other.force_start
         self._cli = self._cli | other._cli
+        # transfer args
+        if other._args is not None:
+            self._args = other._args
 
     def bake(self, scan=None):
         """

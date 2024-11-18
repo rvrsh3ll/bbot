@@ -69,14 +69,14 @@ Presets:
 
 Modules:
   -m MODULE [MODULE ...], --modules MODULE [MODULE ...]
-                        Modules to enable. Choices: robots,leakix,docker_pull,oauth,zoomeye,paramminer_cookies,virustotal,git_clone,shodan_dns,emailformat,azure_realm,fullhunt,ffuf,pgp,dastardly,smuggler,viewdns,dotnetnuke,ipstack,host_header,passivetotal,postman,ntlm,censys,hunt,dnscaa,nuclei,vhost,bufferoverrun,github_workflows,wappalyzer,dnsbrute_mutations,urlscan,baddns_zone,trickest,apkpure,generic_ssrf,httpx,internetdb,bucket_azure,crt,bucket_file_enum,bucket_firebase,digitorus,unstructured,code_repository,portscan,paramminer_getparams,baddns_direct,github_codesearch,builtwith,chaos,url_manipulation,otx,bypass403,dnsdumpster,ajaxpro,subdomainradar,iis_shortnames,affiliates,paramminer_headers,anubisdb,bucket_google,securitytxt,secretsdb,bucket_digitalocean,hackertarget,postman_download,securitytrails,hunterio,subdomaincenter,social,ip2location,credshed,dnscommonsrv,github_org,baddns,azure_tenant,dnsbrute,sslcert,myssl,binaryedge,filedownload,fingerprintx,ipneighbor,telerik,dockerhub,newsletters,gowitness,asn,rapiddns,ffuf_shortnames,dehashed,google_playstore,bucket_amazon,sitedossier,wpscan,trufflehog,badsecrets,gitlab,skymem,bevigil,git,columbus,certspotter,wafw00f,wayback,c99
+                        Modules to enable. Choices: sitedossier,crt,postman,ipneighbor,bucket_amazon,baddns_direct,ipstack,extractous,bucket_google,host_header,internetdb,jadx,baddns_zone,bucket_azure,ajaxpro,skymem,censys,postman_download,dockerhub,generic_ssrf,ip2location,gitlab,url_manipulation,paramminer_getparams,builtwith,emailformat,gowitness,github_workflows,bevigil,wayback,subdomaincenter,nuclei,bucket_firebase,bucket_file_enum,badsecrets,httpx,apkpure,leakix,paramminer_headers,chaos,git,filedownload,git_clone,sslcert,virustotal,trufflehog,ffuf,pgp,shodan_dns,certspotter,ntlm,secretsdb,wappalyzer,c99,securitytrails,securitytxt,newsletters,urlscan,dnsdumpster,credshed,baddns,wafw00f,dastardly,azure_tenant,docker_pull,columbus,fullhunt,fingerprintx,hackertarget,github_codesearch,dnsbrute,zoomeye,affiliates,oauth,azure_realm,binaryedge,bufferoverrun,dehashed,dnscaa,dnscommonsrv,myssl,ffuf_shortnames,robots,rapiddns,digitorus,wpscan,hunterio,passivetotal,code_repository,bypass403,vhost,google_playstore,dnsbrute_mutations,anubisdb,viewdns,trickest,portscan,smuggler,iis_shortnames,paramminer_cookies,bucket_digitalocean,dnsbimi,social,otx,github_org,hunt,telerik,subdomainradar,dotnetnuke,asn
   -l, --list-modules    List available modules.
   -lmo, --list-module-options
                         Show all module config options
   -em MODULE [MODULE ...], --exclude-modules MODULE [MODULE ...]
                         Exclude these modules.
   -f FLAG [FLAG ...], --flags FLAG [FLAG ...]
-                        Enable modules by flag. Choices: aggressive,subdomain-enum,iis-shortnames,code-enum,report,subdomain-hijack,affiliates,portscan,web-thorough,active,passive,deadly,baddns,email-enum,cloud-enum,slow,web-paramminer,service-enum,web-screenshots,social-enum,web-basic,safe
+                        Enable modules by flag. Choices: email-enum,affiliates,web-screenshots,subdomain-hijack,baddns,portscan,iis-shortnames,safe,web-thorough,active,cloud-enum,web-basic,passive,report,code-enum,subdomain-enum,slow,aggressive,social-enum,deadly,web-paramminer,service-enum
   -lf, --list-flags     List available flags.
   -rf FLAG [FLAG ...], --require-flags FLAG [FLAG ...]
                         Only enable modules with these flags (e.g. -rf passive)
@@ -101,7 +101,7 @@ Output:
   -o DIR, --output-dir DIR
                         Directory to output scan results
   -om MODULE [MODULE ...], --output-modules MODULE [MODULE ...]
-                        Output module(s). Choices: websocket,teams,slack,asset_inventory,neo4j,web_report,python,stdout,subdomains,json,http,emails,discord,csv,splunk,txt
+                        Output module(s). Choices: asset_inventory,discord,python,slack,http,json,web_report,teams,subdomains,emails,websocket,sqlite,txt,csv,stdout,neo4j,splunk
   --json, -j            Output scan data in JSON format
   --brief, -br          Output only the data itself
   --event-types EVENT_TYPES [EVENT_TYPES ...]

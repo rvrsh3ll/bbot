@@ -178,6 +178,15 @@ The `asset_inventory` module produces a CSV like this:
 | www.evilcorp.com   | cdn-github  | 2.3.4.5 | Active | 22,80,443  |
 | admin.evilcorp.com | cloud-azure | 5.6.7.8 | N/A    |            |
 
+### SQLite
+
+The `sqlite` output module produces a SQLite database containing all events, scans, and targets. By default, it will be saved in the scan directory as `output.sqlite`.
+
+```bash
+# specifying a custom database path
+bbot -t evilcorp.com -om sqlite -c modules.sqlite.database=/tmp/bbot.sqlite
+```
+
 ### Subdomains
 
 The `subdomains` output module produces simple text file containing only in-scope and resolved subdomains:

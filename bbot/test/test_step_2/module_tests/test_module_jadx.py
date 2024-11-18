@@ -1,9 +1,10 @@
 from pathlib import Path
-from .base import ModuleTestBase, tempapkfile
+from bbot.core.helpers.libmagic import get_magic_info
+from bbot.test.test_step_2.module_tests.base import ModuleTestBase, tempapkfile
 
 
-class TestAPKPure(ModuleTestBase):
-    modules_overrides = ["apkpure", "google_playstore", "speculate"]
+class TestJadx(ModuleTestBase):
+    modules_overrides = ["apkpure", "google_playstore", "speculate", "jadx"]
     apk_file = tempapkfile()
 
     async def setup_after_prep(self, module_test):
@@ -44,28 +45,11 @@ class TestAPKPure(ModuleTestBase):
         )
 
     def check(self, module_test, events):
-        assert len(events) == 6
-        assert 1 == len(
-            [
-                e
-                for e in events
-                if e.type == "DNS_NAME" and e.data == "blacklanternsecurity.com" and e.scope_distance == 0
-            ]
-        ), "Failed to emit target DNS_NAME"
-        assert 1 == len(
-            [e for e in events if e.type == "ORG_STUB" and e.data == "blacklanternsecurity" and e.scope_distance == 0]
-        ), "Failed to find ORG_STUB"
-        assert 1 == len(
-            [
-                e
-                for e in events
-                if e.type == "MOBILE_APP"
-                and "android" in e.tags
-                and e.data["id"] == "com.bbot.test"
-                and e.data["url"] == "https://play.google.com/store/apps/details?id=com.bbot.test"
-            ]
-        ), "Failed to find bbot android app"
-        filesystem_event = [e for e in events if e.type == "FILESYSTEM" and "com.bbot.test.apk" in e.data["path"]]
-        assert 1 == len(filesystem_event), "Failed to download apk"
-        file = Path(filesystem_event[0].data["path"])
-        assert file.is_file(), "Destination apk doesn't exist"
+        filesystem_events = [e for e in events if e.type == "FILESYSTEM"]
+        apk_event = [e for e in filesystem_events if "file" in e.tags]
+        extension, mime_type, description, confidence = get_magic_info(apk_event[0].data["path"])
+        assert description == "Android Application Package", f"Downloaded file was detected as {description}"
+        extract_event = [e for e in filesystem_events if "folder" in e.tags]
+        assert 1 == len(extract_event), "Failed to extract apk"
+        extract_path = Path(extract_event[0].data["path"])
+        assert extract_path.is_dir(), "Destination apk doesn't exist"
