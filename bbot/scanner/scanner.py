@@ -126,7 +126,7 @@ class Scanner:
         self._success = False
 
         if scan_id is not None:
-            self.id = str(id)
+            self.id = str(scan_id)
         else:
             self.id = f"SCAN:{sha1(rand_string(20)).hexdigest()}"
 
