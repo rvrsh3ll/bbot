@@ -1,4 +1,6 @@
+import time
 import logging
+from collections import deque
 
 log = logging.getLogger("bbot.scanner.stats")
 
@@ -10,25 +12,48 @@ def _increment(d, k):
         d[k] = 1
 
 
+class SpeedCounter:
+    """
+    A simple class for keeping a rolling tally of the number of events inside a specific time window
+    """
+
+    def __init__(self, window=60):
+        self.timestamps = deque()
+        self.window = window
+
+    def tick(self):
+        current_time = time.time()
+        self.timestamps.append(current_time)
+        self.remove_old_timestamps(current_time)
+
+    def remove_old_timestamps(self, current_time):
+        while self.timestamps and current_time - self.timestamps[0] > self.window:
+            self.timestamps.popleft()
+
+    @property
+    def speed(self):
+        self.remove_old_timestamps(time.time())
+        return len(self.timestamps)
+
+
 class ScanStats:
     def __init__(self, scan):
         self.scan = scan
         self.module_stats = {}
         self.events_emitted_by_type = {}
-        self.perf_stats = []
-
-    def event_distributed(self, event):
-        _increment(self.events_emitted_by_type, event.type)
-        module_stat = self.get(event.module)
-        if module_stat is not None:
-            module_stat.increment_emitted(event)
+        self.speedometer = SpeedCounter(scan.status_frequency)
 
     def event_produced(self, event):
+        _increment(self.events_emitted_by_type, event.type)
         module_stat = self.get(event.module)
         if module_stat is not None:
             module_stat.increment_produced(event)
 
     def event_consumed(self, event, module):
+        self.speedometer.tick()
+        # skip ingress/egress modules, etc.
+        if module.name.startswith("_"):
+            return
         module_stat = self.get(module)
         if module_stat is not None:
             module_stat.increment_consumed(event)
@@ -66,9 +91,6 @@ class ScanStats:
         return [header] + table
 
     def _make_table(self):
-        self.perf_stats.sort(key=lambda x: x[-1])
-        for callback, runtime in self.perf_stats:
-            log.info(f"{callback}\t{runtime}")
         table = self.table()
         if len(table) == 1:
             table += [["None", "None", "None"]]
@@ -78,17 +100,10 @@ class ScanStats:
 class ModuleStat:
     def __init__(self, module):
         self.module = module
-
-        self.emitted = {}
-        self.emitted_total = 0
         self.produced = {}
         self.produced_total = 0
         self.consumed = {}
         self.consumed_total = 0
-
-    def increment_emitted(self, event):
-        self.emitted_total += 1
-        _increment(self.emitted, event.type)
 
     def increment_produced(self, event):
         self.produced_total += 1

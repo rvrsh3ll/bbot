@@ -1,36 +1,26 @@
-from .crobat import crobat
+from bbot.modules.templates.shodan import shodan
 
 
-class shodan_dns(crobat):
-    """
-    A typical module for authenticated, API-based subdomain enumeration
-    Inherited by several other modules including securitytrails, c99.nl, etc.
-    """
-
+class shodan_dns(shodan):
     watched_events = ["DNS_NAME"]
     produced_events = ["DNS_NAME"]
     flags = ["subdomain-enum", "passive", "safe"]
-    meta = {"description": "Query Shodan for subdomains", "auth_required": True}
+    meta = {
+        "description": "Query Shodan for subdomains",
+        "created_date": "2022-07-03",
+        "author": "@TheTechromancer",
+        "auth_required": True,
+    }
     options = {"api_key": ""}
     options_desc = {"api_key": "Shodan API key"}
 
     base_url = "https://api.shodan.io"
 
-    def setup(self):
-        super().setup()
-        return self.require_api_key()
+    async def handle_event(self, event):
+        await self.handle_event_paginated(event)
 
-    def ping(self):
-        r = self.request_with_fail_count(f"{self.base_url}/api-info?key={self.api_key}")
-        resp_content = getattr(r, "text", "")
-        assert getattr(r, "status_code", 0) == 200, resp_content
+    def make_url(self, query):
+        return f"{self.base_url}/dns/domain/{self.helpers.quote(query)}?key={{api_key}}&page={{page}}"
 
-    def request_url(self, query):
-        url = f"{self.base_url}/dns/domain/{self.helpers.quote(query)}?key={self.api_key}"
-        return self.request_with_fail_count(url)
-
-    def parse_results(self, r, query):
-        json = r.json()
-        if json:
-            for hostname in json.get("subdomains"):
-                yield f"{hostname}.{query}"
+    def parse_results(self, json, query):
+        return [f"{sub}.{query}" for sub in json.get("subdomains", [])]

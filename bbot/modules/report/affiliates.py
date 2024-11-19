@@ -5,18 +5,22 @@ class affiliates(BaseReportModule):
     watched_events = ["*"]
     produced_events = []
     flags = ["passive", "safe", "affiliates"]
-    meta = {"description": "Summarize affiliate domains at the end of a scan"}
+    meta = {
+        "description": "Summarize affiliate domains at the end of a scan",
+        "created_date": "2022-07-25",
+        "author": "@TheTechromancer",
+    }
     scope_distance_modifier = None
     accept_dupes = True
 
-    def setup(self):
+    async def setup(self):
         self.affiliates = {}
         return True
 
-    def handle_event(self, event):
+    async def handle_event(self, event):
         self.add_affiliate(event)
 
-    def report(self):
+    async def report(self):
         affiliates = sorted(self.affiliates.items(), key=lambda x: x[-1]["weight"], reverse=True)
         header = ["Affiliate", "Score", "Count"]
         table = []
@@ -24,7 +28,7 @@ class affiliates(BaseReportModule):
             count = stats["count"]
             weight = stats["weight"]
             table.append([domain, f"{weight:.2f}", f"{count:,}"])
-        self.log_table(table, header, table_name="affiliates")
+        self.log_table(table, header, table_name="affiliates", max_log_entries=50)
 
     def add_affiliate(self, event):
         if event.scope_distance > 0 and event.host and isinstance(event.host, str):

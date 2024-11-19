@@ -5,7 +5,11 @@ import html
 
 class web_report(BaseOutputModule):
     watched_events = ["URL", "TECHNOLOGY", "FINDING", "VULNERABILITY", "VHOST"]
-    meta = {"description": "Create a markdown report with web assets"}
+    meta = {
+        "description": "Create a markdown report with web assets",
+        "created_date": "2023-02-08",
+        "author": "@liquidsec",
+    }
     options = {
         "output_file": "",
         "css_theme_file": "https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.1.0/github-markdown.min.css",
@@ -13,7 +17,7 @@ class web_report(BaseOutputModule):
     options_desc = {"output_file": "Output to file", "css_theme_file": "CSS theme URL for HTML output"}
     deps_pip = ["markdown~=3.4.3"]
 
-    def setup(self):
+    async def setup(self):
         html_css_file = self.config.get("css_theme_file", "")
 
         self.html_header = f"""
@@ -32,38 +36,38 @@ class web_report(BaseOutputModule):
         self._prep_output_dir("web_report.html")
         return True
 
-    def handle_event(self, event):
+    async def handle_event(self, event):
         if event.type == "URL":
-            parsed = event.parsed
+            parsed = event.parsed_url
             host = f"{parsed.scheme}://{parsed.netloc}/"
             if host not in self.web_assets.keys():
                 self.web_assets[host] = {"URL": []}
-            source_chain = []
+            parent_chain = []
 
-            current_parent = event.source
+            current_parent = event.parent
             while not current_parent.type == "SCAN":
-                source_chain.append(
+                parent_chain.append(
                     f" ({current_parent.module})---> [{current_parent.type}]:{html.escape(current_parent.pretty_string)}"
                 )
-                current_parent = current_parent.source
+                current_parent = current_parent.parent
 
-            source_chain.reverse()
-            source_chain_text = (
-                "".join(source_chain)
+            parent_chain.reverse()
+            parent_chain_text = (
+                "".join(parent_chain)
                 + f" ({event.module})---> "
                 + f"[{event.type}]:{html.escape(event.pretty_string)}"
             )
-            self.web_assets[host]["URL"].append(f"**{html.escape(event.data)}**: {source_chain_text}")
+            self.web_assets[host]["URL"].append(f"**{html.escape(event.data)}**: {parent_chain_text}")
 
         else:
-            current_parent = event.source
+            current_parent = event.parent
             parsed = None
             while 1:
                 if current_parent.type == "URL":
-                    parsed = current_parent.parsed
+                    parsed = current_parent.parsed_url
                     break
-                current_parent = current_parent.source
-                if current_parent.source.type == "SCAN":
+                current_parent = current_parent.parent
+                if current_parent.parent.type == "SCAN":
                     break
             if parsed:
                 host = f"{parsed.scheme}://{parsed.netloc}/"
@@ -74,7 +78,7 @@ class web_report(BaseOutputModule):
                 else:
                     self.web_assets[host][event.type].append(html.escape(event.pretty_string))
 
-    def report(self):
+    async def report(self):
         for host in self.web_assets.keys():
             self.markdown += f"# {host}\n\n"
 
@@ -93,5 +97,4 @@ class web_report(BaseOutputModule):
             self.file.write(markdown.markdown(self.markdown))
             self.file.write(self.html_footer)
             self.file.flush()
-            with self._report_lock:
-                self.info(f"Web Report saved to {self.output_file}")
+            self.info(f"Web Report saved to {self.output_file}")

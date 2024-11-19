@@ -1,5 +1,5 @@
+from bbot.errors import HttpCompareError
 from bbot.modules.base import BaseModule
-from bbot.core.errors import HttpCompareError
 
 """
 Port of https://github.com/iamj0ker/bypass-403/ and https://portswigger.net/bappstore/444407b96d9c4de0adb7aed89e826122
@@ -63,6 +63,7 @@ header_payloads = {
     "X-Host": "127.0.0.1",
 }
 
+# This is planned to be replaced in the future: https://github.com/blacklanternsecurity/bbot/issues/1068
 waf_strings = ["The requested URL was rejected"]
 
 for qp in query_payloads:
@@ -78,25 +79,31 @@ class bypass403(BaseModule):
     watched_events = ["URL"]
     produced_events = ["FINDING"]
     flags = ["active", "aggressive", "web-thorough"]
-    meta = {"description": "Check 403 pages for common bypasses"}
+    meta = {"description": "Check 403 pages for common bypasses", "created_date": "2022-07-05", "author": "@liquidsec"}
     in_scope_only = True
 
-    def handle_event(self, event):
-        try:
-            compare_helper = self.helpers.http_compare(event.data, allow_redirects=True)
-        except HttpCompareError as e:
-            self.debug(e)
-            return
+    async def do_checks(self, compare_helper, event, collapse_threshold):
+        results = set()
+        error_count = 0
 
         for sig in signatures:
+            if error_count > 3:
+                self.warning(f"Received too many errors for URL {event.data} aborting bypass403")
+                return None
+
             sig = self.format_signature(sig, event)
             if sig[2] != None:
                 headers = dict(sig[2])
             else:
                 headers = None
-            match, reasons, reflection, subject_response = compare_helper.compare(
-                sig[1], headers=headers, method=sig[0], allow_redirects=True
-            )
+            try:
+                match, reasons, reflection, subject_response = await compare_helper.compare(
+                    sig[1], headers=headers, method=sig[0], allow_redirects=True
+                )
+            except HttpCompareError as e:
+                error_count += 1
+                self.debug(e)
+                continue
 
             # In some cases WAFs will respond with a 200 code which causes a false positive
             if subject_response != None:
@@ -113,25 +120,56 @@ class bypass403(BaseModule):
                     else:
                         reported_signature = f"Modified URL: {sig[0]} {sig[1]}"
                     description = f"403 Bypass Reasons: [{','.join(reasons)}] Sig: [{reported_signature}]"
-                    self.emit_event(
-                        {"description": description, "host": str(event.host), "url": event.data},
-                        "FINDING",
-                        source=event,
-                    )
+                    results.add(description)
+                    if len(results) > collapse_threshold:
+                        return results
                 else:
                     self.debug(f"Status code changed to {str(subject_response.status_code)}, ignoring")
+        return results
 
-    def filter_event(self, event):
+    async def handle_event(self, event):
+        try:
+            compare_helper = self.helpers.http_compare(event.data, allow_redirects=True)
+        except HttpCompareError as e:
+            self.debug(e)
+            return
+
+        collapse_threshold = 6
+        results = await self.do_checks(compare_helper, event, collapse_threshold)
+        if results is None:
+            return
+        if len(results) > collapse_threshold:
+            await self.emit_event(
+                {
+                    "description": f"403 Bypass MULTIPLE SIGNATURES (exceeded threshold {str(collapse_threshold)})",
+                    "host": str(event.host),
+                    "url": event.data,
+                },
+                "FINDING",
+                parent=event,
+                context=f"{{module}} discovered multiple potential 403 bypasses ({{event.type}}) for {event.data}",
+            )
+        else:
+            for description in results:
+                await self.emit_event(
+                    {"description": description, "host": str(event.host), "url": event.data},
+                    "FINDING",
+                    parent=event,
+                    context=f"{{module}} discovered potential 403 bypass ({{event.type}}) for {event.data}",
+                )
+
+    # When a WAF-check helper is available in the future, we will convert to HTTP_RESPONSE and check for the WAF string here.
+    async def filter_event(self, event):
         if ("status-403" in event.tags) or ("status-401" in event.tags):
             return True
         return False
 
     def format_signature(self, sig, event):
         if sig[3] == True:
-            cleaned_path = event.parsed.path.strip("/")
+            cleaned_path = event.parsed_url.path.strip("/")
         else:
-            cleaned_path = event.parsed.path.lstrip("/")
-        kwargs = {"scheme": event.parsed.scheme, "netloc": event.parsed.netloc, "path": cleaned_path}
+            cleaned_path = event.parsed_url.path.lstrip("/")
+        kwargs = {"scheme": event.parsed_url.scheme, "netloc": event.parsed_url.netloc, "path": cleaned_path}
         formatted_url = sig[1].format(**kwargs)
         if sig[2] != None:
             formatted_headers = {k: v.format(**kwargs) for k, v in sig[2].items()}

@@ -1,23 +1,24 @@
 import re
-from bs4 import BeautifulSoup
 
-from .crobat import crobat
+from bbot.modules.templates.subdomain_enum import subdomain_enum
 
 
-class dnsdumpster(crobat):
+class dnsdumpster(subdomain_enum):
     watched_events = ["DNS_NAME"]
     produced_events = ["DNS_NAME"]
     flags = ["subdomain-enum", "passive", "safe"]
-    meta = {"description": "Query dnsdumpster for subdomains"}
-
-    deps_pip = ["bs4", "lxml~=4.9.2"]
+    meta = {
+        "description": "Query dnsdumpster for subdomains",
+        "created_date": "2022-03-12",
+        "author": "@TheTechromancer",
+    }
 
     base_url = "https://dnsdumpster.com"
 
-    def query(self, domain):
+    async def query(self, domain):
         ret = []
         # first, get the CSRF tokens
-        res1 = self.request_with_fail_count(self.base_url)
+        res1 = await self.api_request(self.base_url)
         status_code = getattr(res1, "status_code", 0)
         if status_code in [429]:
             self.verbose(f'Too many requests "{status_code}"')
@@ -27,7 +28,12 @@ class dnsdumpster(crobat):
             return ret
         else:
             self.debug(f'Valid response code "{status_code}" from DNSDumpster')
-        html = BeautifulSoup(res1.content, features="lxml")
+
+        html = self.helpers.beautifulsoup(res1.content, "html.parser")
+        if html is False:
+            self.verbose(f"BeautifulSoup returned False")
+            return ret
+
         csrftoken = None
         csrfmiddlewaretoken = None
         try:
@@ -56,7 +62,7 @@ class dnsdumpster(crobat):
 
         # Otherwise, do the needful
         subdomains = set()
-        res2 = self.request_with_fail_count(
+        res2 = await self.api_request(
             f"{self.base_url}/",
             method="POST",
             cookies={"csrftoken": csrftoken},
@@ -74,8 +80,10 @@ class dnsdumpster(crobat):
         if status_code not in [200]:
             self.verbose(f'Bad response code "{status_code}" from DNSDumpster')
             return ret
-
-        html = BeautifulSoup(res2.content, features="lxml")
+        html = self.helpers.beautifulsoup(res2.content, "html.parser")
+        if html is False:
+            self.verbose(f"BeautifulSoup returned False")
+            return ret
         escaped_domain = re.escape(domain)
         match_pattern = re.compile(r"^[\w\.-]+\." + escaped_domain + r"$")
         for subdomain in html.findAll(text=match_pattern):

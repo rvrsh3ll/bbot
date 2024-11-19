@@ -1,45 +1,78 @@
-name: tests
+name: Tests (Python Versions)
 on:
   push:
+    branches:
+      - stable
+      - dev
   pull_request:
-  pull_request_target:
-    types:
-      - closed
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test:
+  lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - uses: actions/checkout@v4
+      - uses: psf/black@stable
         with:
-          python-version: "3.10"
+          options: "--check"
+      - name: Install Python 3
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - name: Install dependencies
+        run: |
+          pip install flake8
+      - name: flake8
+        run: |
+          flake8
+  test:
+    needs: lint
+    runs-on: ubuntu-latest
+    strategy:
+      # if one python version fails, let the others finish
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
       - name: Install dependencies
         run: |
           pip install poetry
           poetry install
       - name: Run tests
         run: |
-          poetry run pytest --exitfirst --reruns 2 --disable-warnings --log-cli-level=DEBUG --cov-report xml:cov.xml --cov=bbot .
+          poetry run pytest --exitfirst --reruns 2 -o timeout_func_only=true --timeout 1200 --disable-warnings --log-cli-level=INFO --cov-config=bbot/test/coverage.cfg --cov-report xml:cov.xml --cov=bbot .
+      - name: Upload Debug Logs
+        uses: actions/upload-artifact@v3
+        with:
+          name: pytest-debug-logs
+          path: pytest_debug.log
       - name: Upload Code Coverage
-        uses: codecov/codecov-action@v2
+        uses: codecov/codecov-action@v3
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./cov.xml
           verbose: true
-  publish:
+  publish_code:
     needs: test
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request_target' && github.event.pull_request.merged == true && (github.event.pull_request.base.ref == 'dev' || github.event.pull_request.base.ref == 'stable')
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/stable')
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
+          python-version: "3.x"
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
@@ -55,10 +88,9 @@ jobs:
           password: ${{ secrets.PYPI_API_TOKEN }}
       - name: Get BBOT version
         id: version
-        run: |
-          echo "::set-output name=BBOT_VERSION::$(poetry version | cut -d' ' -f2 | tr -d v)"
+        run: echo "BBOT_VERSION=$(poetry version | cut -d' ' -f2)" >> $GITHUB_OUTPUT
       - name: Publish to Docker Hub (dev)
-        if: github.ref == 'refs/heads/dev'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
         uses: elgohr/Publish-Docker-Github-Action@v5
         with:
           name: blacklanternsecurity/bbot
@@ -66,7 +98,7 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
           tags: "latest,dev,${{ steps.version.outputs.BBOT_VERSION }}"
       - name: Publish to Docker Hub (stable)
-        if: github.ref == 'refs/heads/stable'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/stable'
         uses: elgohr/Publish-Docker-Github-Action@v5
         with:
           name: blacklanternsecurity/bbot
@@ -74,9 +106,77 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
           tags: "stable,${{ steps.version.outputs.BBOT_VERSION }}"
       - name: Docker Hub Description
-        if: github.ref == 'refs/heads/dev'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
         uses: peter-evans/dockerhub-description@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
           repository: blacklanternsecurity/bbot
+    outputs:
+      BBOT_VERSION: ${{ steps.version.outputs.BBOT_VERSION }}
+  publish_docs:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/stable' || github.ref == 'refs/heads/dev')
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.BBOT_DOCS_UPDATER_PAT }}
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.x"
+      - run: echo "cache_id=$(date --utc '+%V')" >> $GITHUB_ENV
+      - uses: actions/cache@v3
+        with:
+          key: mkdocs-material-${{ env.cache_id }}
+          path: .cache
+          restore-keys: |
+            mkdocs-material-
+      - name: Install dependencies
+        run: |
+          pip install poetry
+          poetry install --only=docs
+      - name: Configure Git
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git fetch origin gh-pages:refs/remotes/origin/gh-pages
+          if git show-ref --verify --quiet refs/heads/gh-pages; then
+            git branch -f gh-pages origin/gh-pages
+          else
+            git branch --track gh-pages origin/gh-pages
+          fi
+      - name: Generate docs (stable branch)
+        if: github.ref == 'refs/heads/stable'
+        run: |
+          poetry run mike deploy Stable
+      - name: Generate docs (dev branch)
+        if: github.ref == 'refs/heads/dev'
+        run: |
+          poetry run mike deploy Dev
+      - name: Publish docs
+        run: |
+          git switch gh-pages
+          git push
+  # tag_commit:
+  #   needs: publish_code
+  #   runs-on: ubuntu-latest
+  #   if: github.event_name == 'push' && github.ref == 'refs/heads/stable'
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #       with:
+  #         ref: ${{ github.head_ref }}
+  #         fetch-depth: 0 # Fetch all history for all tags and branches
+  #     - name: Configure git
+  #       run: |
+  #         git config --local user.email "info@blacklanternsecurity.com"
+  #         git config --local user.name "GitHub Actions"
+  #     - name: Tag commit
+  #       run: |
+  #         VERSION="${{ needs.publish_code.outputs.BBOT_VERSION }}"
+  #         if [[ "${{ github.ref }}" == "refs/heads/dev" ]]; then
+  #           TAG_MESSAGE="Dev Release $VERSION"
+  #         elif [[ "${{ github.ref }}" == "refs/heads/stable" ]]; then
+  #           TAG_MESSAGE="Stable Release $VERSION"
+  #         fi
+  #         git tag -a $VERSION -m "$TAG_MESSAGE"
+  #         git push origin --tags

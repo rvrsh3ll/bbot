@@ -1,24 +1,30 @@
-from .shodan_dns import shodan_dns
+from bbot.modules.templates.subdomain_enum import subdomain_enum_apikey
 
 
-class c99(shodan_dns):
+class c99(subdomain_enum_apikey):
     watched_events = ["DNS_NAME"]
     produced_events = ["DNS_NAME"]
     flags = ["subdomain-enum", "passive", "safe"]
-    meta = {"description": "Query the C99 API for subdomains", "auth_required": True}
+    meta = {
+        "description": "Query the C99 API for subdomains",
+        "created_date": "2022-07-08",
+        "author": "@TheTechromancer",
+        "auth_required": True,
+    }
     options = {"api_key": ""}
     options_desc = {"api_key": "c99.nl API key"}
 
     base_url = "https://api.c99.nl"
+    ping_url = f"{base_url}/randomnumber?key={{api_key}}&between=1,100&json"
 
-    def ping(self):
-        url = f"{self.base_url}/randomnumber?key={self.api_key}&between=1,100&json"
-        response = self.request_with_fail_count(url)
-        assert response.json()["success"] == True
+    async def ping(self):
+        url = f"{self.base_url}/randomnumber?key={{api_key}}&between=1,100&json"
+        response = await self.api_request(url)
+        assert response.json()["success"] == True, getattr(response, "text", "no response from server")
 
-    def request_url(self, query):
-        url = f"{self.base_url}/subdomainfinder?key={self.api_key}&domain={self.helpers.quote(query)}&json"
-        return self.request_with_fail_count(url)
+    async def request_url(self, query):
+        url = f"{self.base_url}/subdomainfinder?key={{api_key}}&domain={self.helpers.quote(query)}&json"
+        return await self.api_request(url)
 
     def parse_results(self, r, query):
         j = r.json()

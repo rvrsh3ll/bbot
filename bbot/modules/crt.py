@@ -1,23 +1,27 @@
-from .crobat import crobat
+from bbot.modules.templates.subdomain_enum import subdomain_enum
 
 
-class crt(crobat):
+class crt(subdomain_enum):
     flags = ["subdomain-enum", "passive", "safe"]
     watched_events = ["DNS_NAME"]
     produced_events = ["DNS_NAME"]
-    meta = {"description": "Query crt.sh (certificate transparency) for subdomains"}
+    meta = {
+        "description": "Query crt.sh (certificate transparency) for subdomains",
+        "created_date": "2022-05-13",
+        "author": "@TheTechromancer",
+    }
 
     base_url = "https://crt.sh"
     reject_wildcards = False
 
-    def setup(self):
+    async def setup(self):
         self.cert_ids = set()
-        return super().setup()
+        return await super().setup()
 
-    def request_url(self, query):
+    async def request_url(self, query):
         params = {"q": f"%.{query}", "output": "json"}
         url = self.helpers.add_get_params(self.base_url, params).geturl()
-        return self.request_with_fail_count(url, timeout=self.http_timeout + 10)
+        return await self.api_request(url, timeout=self.http_timeout + 30)
 
     def parse_results(self, r, query):
         j = r.json()

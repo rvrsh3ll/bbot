@@ -1,0 +1,34 @@
+name: Daily Docs Update
+
+on:
+  schedule:
+    - cron: '30 2 * * *'  # Runs daily at 2:30 AM UTC, a less congested time
+  workflow_dispatch:      # Allows manual triggering of the workflow
+
+jobs:
+  update_docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.BBOT_DOCS_UPDATER_PAT }}
+          ref: dev  # Checkout the dev branch
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - name: Install dependencies
+        run: |
+          pip install poetry
+          poetry install
+      - name: Generate docs
+        run: |
+          poetry run bbot/scripts/docs.py
+      - name: Create or Update Pull Request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.BBOT_DOCS_UPDATER_PAT }}
+          branch: update-docs
+          base: dev
+          title: "Daily Docs Update"
+          body: "This is an automated pull request to update the documentation."

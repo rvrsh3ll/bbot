@@ -1,333 +1,286 @@
 #!/usr/bin/env python3
 
-import os
 import sys
 import logging
-import threading
-import traceback
-from omegaconf import OmegaConf
-from contextlib import suppress
-
-# fix tee buffering
-sys.stdout.reconfigure(line_buffering=True)
-
-# logging
-from bbot.core.logger import get_log_level, toggle_log_level
-
-import bbot.core.errors
+import multiprocessing
+from bbot.errors import *
 from bbot import __version__
-from bbot.modules import module_loader
-from bbot.core.configurator.args import parser
-from bbot.core.helpers.logger import log_to_stderr
-from bbot.core.configurator import ensure_config_files, check_cli_args
-
-log = logging.getLogger("bbot.cli")
-sys.stdout.reconfigure(line_buffering=True)
+from bbot.logger import log_to_stderr
+from bbot.core.helpers.misc import chain_lists
 
 
-log_level = get_log_level()
+if multiprocessing.current_process().name == "MainProcess":
+    silent = "-s" in sys.argv or "--silent" in sys.argv
+
+    if not silent:
+        ascii_art = rf""" [1;38;5;208m ______ [0m _____   ____ _______
+ [1;38;5;208m|  ___ \[0m|  __ \ / __ \__   __|
+ [1;38;5;208m| |___) [0m| |__) | |  | | | |
+ [1;38;5;208m|  ___ <[0m|  __ <| |  | | | |
+ [1;38;5;208m| |___) [0m| |__) | |__| | | |
+ [1;38;5;208m|______/[0m|_____/ \____/  |_|
+ [1;38;5;208mBIGHUGE[0m BLS OSINT TOOL {__version__}
+
+www.blacklanternsecurity.com/bbot
+"""
+        print(ascii_art, file=sys.stderr)
+
+scan_name = ""
 
 
-from . import config
+async def _main():
 
+    import asyncio
+    import traceback
+    from contextlib import suppress
 
-def main():
-    err = False
-    scan_name = ""
+    # fix tee buffering
+    sys.stdout.reconfigure(line_buffering=True)
 
-    ensure_config_files()
+    log = logging.getLogger("bbot.cli")
+
+    from bbot.scanner import Scanner
+    from bbot.scanner.preset import Preset
+
+    global scan_name
 
     try:
-        if len(sys.argv) == 1:
-            parser.print_help()
-            sys.exit(1)
 
-        options = parser.parse_args()
-        check_cli_args()
+        # start by creating a default scan preset
+        preset = Preset(_log=True, name="bbot_cli_main")
+        # parse command line arguments and merge into preset
+        try:
+            preset.parse_args()
+        except BBOTArgumentError as e:
+            log_to_stderr(str(e), level="WARNING")
+            log.trace(traceback.format_exc())
+            return
+        # ensure arguments (-c config options etc.) are valid
+        options = preset.args.parsed
+
+        # print help if no arguments
+        if len(sys.argv) == 1:
+            print(preset.args.parser.format_help())
+            sys.exit(1)
+            return
 
         # --version
         if options.version:
-            log.stdout(__version__)
+            print(__version__)
             sys.exit(0)
             return
 
-        # --current-config
-        if options.current_config:
-            log.stdout(f"{OmegaConf.to_yaml(config)}")
+        # --list-presets
+        if options.list_presets:
+            print("")
+            print("### PRESETS ###")
+            print("")
+            for row in preset.presets_table().splitlines():
+                print(row)
+            return
+
+        # if we're listing modules or their options
+        if options.list_modules or options.list_module_options:
+
+            # if no modules or flags are specified, enable everything
+            if not (options.modules or options.output_modules or options.flags):
+                for module, preloaded in preset.module_loader.preloaded().items():
+                    module_type = preloaded.get("type", "scan")
+                    preset.add_module(module, module_type=module_type)
+
+            if options.modules or options.output_modules or options.flags:
+                preset._default_output_modules = options.output_modules
+                preset._default_internal_modules = []
+
+            preset.bake()
+
+            # --list-modules
+            if options.list_modules:
+                print("")
+                print("### MODULES ###")
+                print("")
+                for row in preset.module_loader.modules_table(preset.modules).splitlines():
+                    print(row)
+                return
+
+            # --list-module-options
+            if options.list_module_options:
+                print("")
+                print("### MODULE OPTIONS ###")
+                print("")
+                for row in preset.module_loader.modules_options_table(preset.modules).splitlines():
+                    print(row)
+                return
+
+        # --list-flags
+        if options.list_flags:
+            flags = preset.flags if preset.flags else None
+            print("")
+            print("### FLAGS ###")
+            print("")
+            for row in preset.module_loader.flags_table(flags=flags).splitlines():
+                print(row)
+            return
+
+        try:
+            scan = Scanner(preset=preset)
+        except (PresetAbortError, ValidationError) as e:
+            log.warning(str(e))
+            return
+
+        deadly_modules = [
+            m for m in scan.preset.scan_modules if "deadly" in preset.preloaded_module(m).get("flags", [])
+        ]
+        if deadly_modules and not options.allow_deadly:
+            log.hugewarning(f"You enabled the following deadly modules: {','.join(deadly_modules)}")
+            log.hugewarning(f"Deadly modules are highly intrusive")
+            log.hugewarning(f"Please specify --allow-deadly to continue")
+            return False
+
+        # --current-preset
+        if options.current_preset:
+            print(scan.preset.to_yaml())
             sys.exit(0)
             return
 
-        log.verbose(f'Command: {" ".join(sys.argv)}')
+        # --current-preset-full
+        if options.current_preset_full:
+            print(scan.preset.to_yaml(full_config=True))
+            sys.exit(0)
+            return
 
-        if options.agent_mode:
-            from bbot.agent import Agent
+        # --install-all-deps
+        if options.install_all_deps:
+            all_modules = list(preset.module_loader.preloaded())
+            scan.helpers.depsinstaller.force_deps = True
+            succeeded, failed = await scan.helpers.depsinstaller.install(*all_modules)
+            log.info("Finished installing module dependencies")
+            return False if failed else True
 
-            agent = Agent(config)
-            success = agent.setup()
-            if success:
-                agent.start()
+        scan_name = str(scan.name)
 
-        else:
-            from bbot.scanner import Scanner
+        log.verbose("")
+        log.verbose("### MODULES ENABLED ###")
+        log.verbose("")
+        for row in scan.preset.module_loader.modules_table(scan.preset.modules).splitlines():
+            log.verbose(row)
 
-            try:
-                module_filtering = False
-                if (options.list_modules or options.help_all) and not any([options.flags, options.modules]):
-                    module_filtering = True
-                    modules = set(module_loader.preloaded(type="scan"))
-                else:
-                    modules = set(options.modules)
-                    # enable modules by flags
-                    for m, c in module_loader.preloaded().items():
-                        if m not in modules:
-                            flags = c.get("flags", [])
-                            if "deadly" in flags:
-                                continue
-                            for f in options.flags:
-                                if f in flags:
-                                    log.verbose(f'Enabling {m} because it has flag "{f}"')
-                                    modules.add(m)
+        scan.helpers.word_cloud.load()
+        await scan._prep()
 
-                default_output_modules = ["human", "json", "csv"]
+        if not options.dry_run:
+            log.trace(f"Command: {' '.join(sys.argv)}")
 
-                # Make a list of the modules which can be output to the console
-                consoleable_output_modules = [
-                    k for k, v in module_loader.preloaded(type="output").items() if "console" in v["config"]
-                ]
+            if sys.stdin.isatty():
 
-                # If no options are specified, use the default set
-                if not options.output_modules:
-                    options.output_modules = default_output_modules
-
-                # if none of the output modules provided on the command line are consoleable, don't turn off the defaults. Instead, just add the one specified to the defaults.
-                elif not any(o in consoleable_output_modules for o in options.output_modules):
-                    options.output_modules += default_output_modules
-
-                scanner = Scanner(
-                    *options.targets,
-                    modules=list(modules),
-                    output_modules=options.output_modules,
-                    config=config,
-                    name=options.name,
-                    whitelist=options.whitelist,
-                    blacklist=options.blacklist,
-                    strict_scope=options.strict_scope,
-                    force_start=options.force,
-                )
-
-                if options.install_all_deps:
-                    all_modules = list(module_loader.preloaded())
-                    scanner.helpers.depsinstaller.force_deps = True
-                    scanner.helpers.depsinstaller.install(*all_modules)
-                    log.info("Finished installing module dependencies")
-                    return
-
-                scan_name = str(scanner.name)
-
-                # enable modules by dependency
-                # this is only a basic surface-level check
-                # todo: recursive dependency graph with networkx or topological sort?
-                all_modules = list(set(scanner._scan_modules + scanner._internal_modules + scanner._output_modules))
-                while 1:
-                    changed = False
-                    dep_choices = module_loader.recommend_dependencies(all_modules)
-                    if not dep_choices:
-                        break
-                    for event_type, deps in dep_choices.items():
-                        if event_type in ("*", "all"):
-                            continue
-                        # skip resolving dependency if a target provides the missing type
-                        if any(e.type == event_type for e in scanner.target.events):
-                            continue
-                        required_by = deps.get("required_by", [])
-                        recommended = deps.get("recommended", [])
-                        if not recommended:
-                            log.hugewarning(
-                                f"{len(required_by):,} modules ({','.join(required_by)}) rely on {event_type} but no modules produce it"
+                # warn if any targets belong directly to a cloud provider
+                for event in scan.target.events:
+                    if event.type == "DNS_NAME":
+                        cloudcheck_result = scan.helpers.cloudcheck(event.host)
+                        if cloudcheck_result:
+                            scan.hugewarning(
+                                f'YOUR TARGET CONTAINS A CLOUD DOMAIN: "{event.host}". You\'re in for a wild ride!'
                             )
-                        elif len(recommended) == 1:
-                            log.verbose(
-                                f"Enabling {next(iter(recommended))} because {len(required_by):,} modules ({','.join(required_by)}) rely on it for {event_type}"
-                            )
-                            all_modules = list(set(all_modules + list(recommended)))
-                            scanner._scan_modules = list(set(scanner._scan_modules + list(recommended)))
-                            changed = True
-                        else:
-                            log.hugewarning(
-                                f"{len(required_by):,} modules ({','.join(required_by)}) rely on {event_type} but no enabled module produces it"
-                            )
-                            log.hugewarning(
-                                f"Recommend enabling one or more of the following modules which produce {event_type}:"
-                            )
-                            for m in recommended:
-                                log.warning(f" - {m}")
-                    if not changed:
-                        break
 
-                # required flags
-                modules = set(scanner._scan_modules)
-                for m in scanner._scan_modules:
-                    flags = module_loader._preloaded.get(m, {}).get("flags", [])
-                    if not all(f in flags for f in options.require_flags):
-                        log.verbose(
-                            f"Removing {m} because it does not have the required flags: {'+'.join(options.require_flags)}"
-                        )
-                        with suppress(KeyError):
-                            modules.remove(m)
+                if not options.yes:
+                    log.hugesuccess(f"Scan ready. Press enter to execute {scan.name}")
+                    input()
 
-                # excluded flags
-                for m in scanner._scan_modules:
-                    flags = module_loader._preloaded.get(m, {}).get("flags", [])
-                    if any(f in flags for f in options.exclude_flags):
-                        log.verbose(f"Removing {m} because of excluded flag: {','.join(options.exclude_flags)}")
-                        with suppress(KeyError):
-                            modules.remove(m)
+                import os
+                import re
+                import fcntl
+                from bbot.core.helpers.misc import smart_decode
 
-                # excluded modules
-                for m in options.exclude_modules:
-                    if m in modules:
-                        log.verbose(f"Removing {m} because it is excluded")
-                        with suppress(KeyError):
-                            modules.remove(m)
-                scanner._scan_modules = list(modules)
-
-                log_fn = log.info
-                if options.list_modules or options.help_all:
-                    log_fn = log.stdout
-
-                help_modules = list(modules)
-                if module_filtering:
-                    help_modules = None
-
-                if options.help_all:
-                    log_fn(parser.format_help())
-
-                log_fn("")
-                log_fn("### MODULES ###")
-                log_fn("")
-                for row in module_loader.modules_table(modules=help_modules).splitlines():
-                    log_fn(row)
-
-                if options.help_all:
-                    log_fn("")
-                    log_fn("### MODULE OPTIONS ###")
-                    log_fn("")
-                    for row in module_loader.modules_options_table(modules=help_modules).splitlines():
-                        log_fn(row)
-
-                if options.list_modules or options.help_all:
-                    return
-
-                module_list = module_loader.filter_modules(modules=modules)
-                deadly_modules = []
-                active_modules = []
-                active_aggressive_modules = []
-                slow_modules = []
-                for m in module_list:
-                    if m[0] in scanner._scan_modules:
-                        if "deadly" in m[-1]["flags"]:
-                            deadly_modules.append(m[0])
-                        if "active" in m[-1]["flags"]:
-                            active_modules.append(m[0])
-                            if "aggressive" in m[-1]["flags"]:
-                                active_aggressive_modules.append(m[0])
-                        if "slow" in m[-1]["flags"]:
-                            slow_modules.append(m[0])
-                if scanner._scan_modules:
-                    if deadly_modules and not options.allow_deadly:
-                        log.hugewarning(f"You enabled the following deadly modules: {','.join(deadly_modules)}")
-                        log.hugewarning(f"Deadly modules are highly intrusive")
-                        log.hugewarning(f"Please specify --allow-deadly to continue")
-                        return
-                    if active_modules:
-                        if active_modules:
-                            if active_aggressive_modules:
-                                log.hugewarning(
-                                    "This is an (aggressive) active scan! Intrusive connections will be made to target"
-                                )
-                            else:
-                                log.hugewarning(
-                                    "This is a (safe) active scan. Non-intrusive connections will be made to target"
-                                )
+                def handle_keyboard_input(keyboard_input):
+                    kill_regex = re.compile(r"kill (?P<modules>[a-z0-9_ ,]+)")
+                    if keyboard_input:
+                        log.verbose(f'Got keyboard input: "{keyboard_input}"')
+                        kill_match = kill_regex.match(keyboard_input)
+                        if kill_match:
+                            modules = kill_match.group("modules")
+                            if modules:
+                                modules = chain_lists(modules)
+                                for module in modules:
+                                    if module in scan.modules:
+                                        log.hugewarning(f'Killing module: "{module}"')
+                                        scan.kill_module(module, message="killed by user")
+                                    else:
+                                        log.warning(f'Invalid module: "{module}"')
                     else:
-                        log.hugeinfo("This is a passive scan. No connections will be made to target")
-                    if slow_modules:
-                        log.warning(
-                            f"You have enabled the following slow modules: {','.join(slow_modules)}. Scan may take longer than usual"
-                        )
+                        scan.preset.core.logger.toggle_log_level(logger=log)
+                        scan.modules_status(_log=True)
 
-                scanner.helpers.word_cloud.load(options.load_wordcloud)
+                reader = asyncio.StreamReader()
+                protocol = asyncio.StreamReaderProtocol(reader)
+                await asyncio.get_running_loop().connect_read_pipe(lambda: protocol, sys.stdin)
 
-                scanner.prep()
+                # set stdout and stderr to blocking mode
+                # this is needed to prevent BlockingIOErrors in logging etc.
+                fds = [sys.stdout.fileno(), sys.stderr.fileno()]
+                for fd in fds:
+                    flags = fcntl.fcntl(fd, fcntl.F_GETFL)
+                    fcntl.fcntl(fd, fcntl.F_SETFL, flags & ~os.O_NONBLOCK)
 
-                if not options.dry_run:
-                    if not options.agent_mode and not options.yes and sys.stdin.isatty():
-                        log.hugesuccess(f"Scan ready. Press enter to execute {scanner.name}")
-                        input()
-
-                    def keyboard_listen():
+                async def akeyboard_listen():
+                    try:
                         allowed_errors = 10
                         while 1:
-                            keyboard_input = "a"
+                            keyboard_input = None
                             try:
-                                keyboard_input = input()
+                                keyboard_input = smart_decode((await reader.readline()).strip())
                                 allowed_errors = 10
-                            except Exception:
+                            except Exception as e:
+                                log_to_stderr(f"Error in keyboard listen loop: {e}", level="TRACE")
+                                log_to_stderr(traceback.format_exc(), level="TRACE")
                                 allowed_errors -= 1
-                            if not keyboard_input:
-                                toggle_log_level(logger=log)
+                            if keyboard_input is not None:
+                                handle_keyboard_input(keyboard_input)
                             if allowed_errors <= 0:
                                 break
+                    except Exception as e:
+                        log_to_stderr(f"Error in keyboard listen task: {e}", level="ERROR")
+                        log_to_stderr(traceback.format_exc(), level="TRACE")
 
-                    keyboard_listen_thread = threading.Thread(target=keyboard_listen, daemon=True)
-                    keyboard_listen_thread.start()
+                asyncio.create_task(akeyboard_listen())
 
-                    scanner.start_without_generator()
+            await scan.async_start_without_generator()
 
-            except bbot.core.errors.ScanError as e:
-                log_to_stderr(str(e), level="ERROR")
-            except Exception:
-                raise
-            finally:
-                with suppress(NameError):
-                    scanner.cleanup()
+        return True
 
-    except bbot.core.errors.BBOTError as e:
-        log_to_stderr(f"{e} (--debug for details)", level="ERROR")
-        if log_level <= logging.DEBUG:
-            log_to_stderr(traceback.format_exc(), level="DEBUG")
-        err = True
-
-    except Exception:
-        log_to_stderr(f"Encountered unknown error: {traceback.format_exc()}", level="ERROR")
-        err = True
-
-    except KeyboardInterrupt:
-        msg = "Interrupted"
-        if scan_name:
-            msg = f"You killed {scan_name}"
-        log_to_stderr(msg, level="ERROR")
-        err = True
+    except BBOTError as e:
+        log.error(str(e))
+        log.trace(traceback.format_exc())
 
     finally:
         # save word cloud
         with suppress(BaseException):
-            save_success, filename = scanner.helpers.word_cloud.save(options.save_wordcloud)
+            save_success, filename = scan.helpers.word_cloud.save()
             if save_success:
-                log_to_stderr(f"Saved word cloud ({len(scanner.helpers.word_cloud):,} words) to {filename}")
+                log_to_stderr(f"Saved word cloud ({len(scan.helpers.word_cloud):,} words) to {filename}")
         # remove output directory if empty
         with suppress(BaseException):
-            scanner.home.rmdir()
-        if err:
-            os._exit(1)
+            scan.home.rmdir()
 
-        # debug troublesome modules
-        """
-        from time import sleep
-        while 1:
-            scanner.manager.modules_status(_log=True)
-            sleep(1)
-        """
+
+def main():
+    import asyncio
+    import traceback
+    from bbot.core import CORE
+
+    global scan_name
+    try:
+        asyncio.run(_main())
+    except asyncio.CancelledError:
+        if CORE.logger.log_level <= logging.DEBUG:
+            log_to_stderr(traceback.format_exc(), level="DEBUG")
+    except KeyboardInterrupt:
+        msg = "Interrupted"
+        if scan_name:
+            msg = f"You killed {scan_name}"
+        log_to_stderr(msg, level="WARNING")
+        if CORE.logger.log_level <= logging.DEBUG:
+            log_to_stderr(traceback.format_exc(), level="DEBUG")
+        exit(1)
 
 
 if __name__ == "__main__":

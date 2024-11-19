@@ -1,484 +1,412 @@
-![bbot_banner](https://user-images.githubusercontent.com/20261699/158000235-6c1ace81-a267-4f8e-90a1-f4c16884ebac.png)
+[![bbot_banner](https://github.com/user-attachments/assets/f02804ce-9478-4f1e-ac4d-9cf5620a3214)](https://github.com/blacklanternsecurity/bbot)
 
-# BEE·bot
-### OSINT automation for hackers.
+[![Python Version](https://img.shields.io/badge/python-3.9+-FF8400)](https://www.python.org) [![License](https://img.shields.io/badge/license-GPLv3-FF8400.svg)](https://github.com/blacklanternsecurity/bbot/blob/dev/LICENSE) [![DEF CON Recon Village 2024](https://img.shields.io/badge/DEF%20CON%20Demo%20Labs-2023-FF8400.svg)](https://www.reconvillage.org/talks) [![PyPi Downloads](https://static.pepy.tech/personalized-badge/bbot?right_color=orange&left_color=grey)](https://pepy.tech/project/bbot) [![Black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black) [![Tests](https://github.com/blacklanternsecurity/bbot/actions/workflows/tests.yml/badge.svg?branch=stable)](https://github.com/blacklanternsecurity/bbot/actions?query=workflow%3A"tests") [![Codecov](https://codecov.io/gh/blacklanternsecurity/bbot/branch/dev/graph/badge.svg?token=IR5AZBDM5K)](https://codecov.io/gh/blacklanternsecurity/bbot) [![Discord](https://img.shields.io/discord/859164869970362439)](https://discord.com/invite/PZqkgxu5SA)
 
-~~~bash
-pip install bbot
-~~~
+### **BEE·bot** is a multipurpose scanner inspired by [Spiderfoot](https://github.com/smicallef/spiderfoot), built to automate your **Recon**, **Bug Bounties**, and **ASM**!
 
-[![Python Version](https://img.shields.io/badge/python-3.9+-FF8400)](https://www.python.org) [![Black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black) [![License](https://img.shields.io/badge/license-GPLv3-FF8400.svg)](https://github.com/blacklanternsecurity/bbot/blob/dev/LICENSE) [![Tests](https://github.com/blacklanternsecurity/bbot/actions/workflows/tests.yml/badge.svg?branch=stable)](https://github.com/blacklanternsecurity/bbot/actions?query=workflow%3A"tests") [![Codecov](https://codecov.io/gh/blacklanternsecurity/bbot/branch/dev/graph/badge.svg?token=IR5AZBDM5K)](https://codecov.io/gh/blacklanternsecurity/bbot)
+https://github.com/blacklanternsecurity/bbot/assets/20261699/e539e89b-92ea-46fa-b893-9cde94eebf81
 
-![bbot-demo](https://user-images.githubusercontent.com/20261699/217346759-d5bf56c3-3936-43f7-ad14-4d73d2cd1417.gif)
+_A BBOT scan in real-time - visualization with [VivaGraphJS](https://github.com/blacklanternsecurity/bbot-vivagraphjs)_
 
-### **BBOT** is a **recursive**, **modular** OSINT framework inspired by Spiderfoot.
+## Installation
 
-BBOT can execute the entire OSINT process in a single command: subdomain enumeration, port scans, web screenshots (with `gowitness`), vulnerability scanning (with `nuclei`), and much more. BBOT has over **80 modules** and counting.
-
-Read our [blog post](https://blog.blacklanternsecurity.com/p/subdomain-enumeration-tool-face-off) to find out why BBOT is the most thorough subdomain enumeration tool available.
-
-![graphs-small](https://user-images.githubusercontent.com/20261699/199602154-14c71a93-57aa-4ac0-ad81-87ce64fbffc7.png)
-
-## Installation ([pip](https://pypi.org/project/bbot/))
-Note: installing in a virtualenv (e.g. via `pipx`) is recommended
-~~~bash
+```bash
 # stable version
-pip install bbot
+pipx install bbot
 
 # bleeding edge (dev branch)
-pip install --pre bbot
+pipx install --pip-args '\--pre' bbot
+```
 
-bbot --help
-~~~
-Prerequisites:
-- Linux (Windows and macOS are *not* supported)
-- Python 3.9 or newer
+_For more installation methods, including [Docker](https://hub.docker.com/r/blacklanternsecurity/bbot), see [Getting Started](https://www.blacklanternsecurity.com/bbot/Stable/)_
 
-## Installation ([Docker](https://hub.docker.com/r/blacklanternsecurity/bbot))
-~~~bash
-# bleeding edge (dev)
-docker run -it blacklanternsecurity/bbot --help
+## Example Commands
 
-# stable
-docker run -it blacklanternsecurity/bbot:stable --help
+### 1) Subdomain Finder
 
-# note: alternatively there is a helper script that will map docker volumes to persist your BBOT scan data:
-./bbot-docker.sh --help
-~~~
+Passive API sources plus a recursive DNS brute-force with target-specific subdomain mutations.
 
-If you need help with installation, please refer to the [wiki](https://github.com/blacklanternsecurity/bbot/wiki#installation).
+```bash
+# find subdomains of evilcorp.com
+bbot -t evilcorp.com -p subdomain-enum
 
-See also: [Release History](https://github.com/blacklanternsecurity/bbot/wiki/Release-History)
+# passive sources only
+bbot -t evilcorp.com -p subdomain-enum -rf passive
+```
 
-## Scanning with BBOT
+<!-- BBOT SUBDOMAIN-ENUM PRESET EXPANDABLE -->
 
-### Examples
-~~~bash
-# subdomains
-bbot -t evilcorp.com -f subdomain-enum
+<details>
+<summary><b><code>subdomain-enum.yml</code></b></summary>
 
-# subdomains (passive only)
-bbot -t evilcorp.com -f subdomain-enum -rf passive
+```yaml
+description: Enumerate subdomains via APIs, brute-force
 
-# subdomains + port scan + web screenshots
-bbot -t evilcorp.com -f subdomain-enum -m naabu gowitness -n my_scan -o .
+flags:
+  # enable every module with the subdomain-enum flag
+  - subdomain-enum
 
-# subdomains + basic web scan (wappalyzer, robots.txt, iis shortnames, etc.)
-bbot -t evilcorp.com -f subdomain-enum web-basic
+output_modules:
+  # output unique subdomains to TXT file
+  - subdomains
 
-# subdomains + web spider (search for emails, etc.)
-bbot -t evilcorp.com -f subdomain-enum -c web_spider_distance=2 web_spider_depth=2
+config:
+  dns:
+    threads: 25
+    brute_threads: 1000
+  # put your API keys here
+  # modules:
+  #   github:
+  #     api_key: ""
+  #   chaos:
+  #     api_key: ""
+  #   securitytrails:
+  #     api_key: ""
 
-# everything at once because yes
-# subdomains + emails + cloud + port scan + non-intrusive web + web screenshots + nuclei
-bbot -t evilcorp.com -f subdomain-enum email-enum cloud-enum web-basic -m naabu gowitness nuclei --allow-deadly
+```
 
-# list modules
-bbot -l
-~~~
+</details>
 
-### Targets
+<!-- END BBOT SUBDOMAIN-ENUM PRESET EXPANDABLE -->
 
-Targets seed a scan with initial data. You can specify an unlimited number of targets, either directly on the command line or in files (or both!). Targets can be any of the following:
+BBOT consistently finds 20-50% more subdomains than other tools. The bigger the domain, the bigger the difference. To learn how this is possible, see [How It Works](https://www.blacklanternsecurity.com/bbot/Dev/how_it_works/).
 
-- DNS_NAME (`evilcorp.com`)
-- IP_ADDRESS (`1.2.3.4`)
-- IP_RANGE (`1.2.3.0/24`)
-- URL (`https://www.evilcorp.com`)
-- EMAIL_ADDRESS (`bob@evilcorp.com`)
+![subdomain-stats-ebay](https://github.com/blacklanternsecurity/bbot/assets/20261699/de3e7f21-6f52-4ac4-8eab-367296cd385f)
 
-For example, the following scan is totally valid:
+### 2) Web Spider
 
-~~~bash
-# multiple targets
-bbot -t evilcorp.com evilcorp.co.uk http://www.evilcorp.cn 1.2.3.0/24 other_targets.txt
-~~~
+```bash
+# crawl evilcorp.com, extracting emails and other goodies
+bbot -t evilcorp.com -p spider
+```
 
-#### Whitelists / Blacklists
+<!-- BBOT SPIDER PRESET EXPANDABLE -->
 
-BBOT's whitelist determines what's considered to be in-scope. By default, the whitelist is simply your target. But if you want more granular scope control, you can override it with `--whitelist` (or add a `--blacklist`).
+<details>
+<summary><b><code>spider.yml</code></b></summary>
 
-~~~bash
-# seed a scan with two domains, but only consider assets to be in scope if they are inside 1.2.3.0/24
-bbot -t evilcorp.com evilcorp.co.uk --whitelist 1.2.3.0/24 --blacklist test.evilcorp.com 1.2.3.4 blacklist.txt
-~~~
+```yaml
+description: Recursive web spider
 
-Visit the wiki for more [tips and tricks](https://github.com/blacklanternsecurity/bbot/wiki#tips-and-tricks).
+modules:
+  - httpx
 
-## Using BBOT as a Python library
-~~~python
+config:
+  web:
+    # how many links to follow in a row
+    spider_distance: 2
+    # don't follow links whose directory depth is higher than 4
+    spider_depth: 4
+    # maximum number of links to follow per page
+    spider_links_per_page: 25
+
+```
+
+</details>
+
+<!-- END BBOT SPIDER PRESET EXPANDABLE -->
+
+### 3) Email Gatherer
+
+```bash
+# quick email enum with free APIs + scraping
+bbot -t evilcorp.com -p email-enum
+
+# pair with subdomain enum + web spider for maximum yield
+bbot -t evilcorp.com -p email-enum subdomain-enum spider
+```
+
+<!-- BBOT EMAIL-ENUM PRESET EXPANDABLE -->
+
+<details>
+<summary><b><code>email-enum.yml</code></b></summary>
+
+```yaml
+description: Enumerate email addresses from APIs, web crawling, etc.
+
+flags:
+  - email-enum
+
+output_modules:
+  - emails
+
+```
+
+</details>
+
+<!-- END BBOT EMAIL-ENUM PRESET EXPANDABLE -->
+
+### 4) Web Scanner
+
+```bash
+# run a light web scan against www.evilcorp.com
+bbot -t www.evilcorp.com -p web-basic
+
+# run a heavy web scan against www.evilcorp.com
+bbot -t www.evilcorp.com -p web-thorough
+```
+
+<!-- BBOT WEB-BASIC PRESET EXPANDABLE -->
+
+<details>
+<summary><b><code>web-basic.yml</code></b></summary>
+
+```yaml
+description: Quick web scan
+
+include:
+  - iis-shortnames
+
+flags:
+  - web-basic
+
+```
+
+</details>
+
+<!-- END BBOT WEB-BASIC PRESET EXPANDABLE -->
+
+<!-- BBOT WEB-THOROUGH PRESET EXPANDABLE -->
+
+<details>
+<summary><b><code>web-thorough.yml</code></b></summary>
+
+```yaml
+description: Aggressive web scan
+
+include:
+  # include the web-basic preset
+  - web-basic
+
+flags:
+  - web-thorough
+
+```
+
+</details>
+
+<!-- END BBOT WEB-THOROUGH PRESET EXPANDABLE -->
+
+### 5) Everything Everywhere All at Once
+
+```bash
+# everything everywhere all at once
+bbot -t evilcorp.com -p kitchen-sink
+
+# roughly equivalent to:
+bbot -t evilcorp.com -p subdomain-enum cloud-enum code-enum email-enum spider web-basic paramminer dirbust-light web-screenshots
+```
+
+<!-- BBOT KITCHEN-SINK PRESET EXPANDABLE -->
+
+<details>
+<summary><b><code>kitchen-sink.yml</code></b></summary>
+
+```yaml
+description: Everything everywhere all at once
+
+include:
+  - subdomain-enum
+  - cloud-enum
+  - code-enum
+  - email-enum
+  - spider
+  - web-basic
+  - paramminer
+  - dirbust-light
+  - web-screenshots
+  - baddns-thorough
+
+config:
+  modules:
+    baddns:
+      enable_references: True
+
+
+
+```
+
+</details>
+
+<!-- END BBOT KITCHEN-SINK PRESET EXPANDABLE -->
+
+## How it Works
+
+Click the graph below to explore the [inner workings](https://www.blacklanternsecurity.com/bbot/Stable/how_it_works/) of BBOT.
+
+[![image](https://github.com/blacklanternsecurity/bbot/assets/20261699/e55ba6bd-6d97-48a6-96f0-e122acc23513)](https://www.blacklanternsecurity.com/bbot/Stable/how_it_works/)
+
+## BBOT as a Python Library
+
+#### Synchronous
+```python
 from bbot.scanner import Scanner
 
-# any number of targets can be specified
-scan = Scanner("evilcorp.com", "evilcorp.co.uk", modules=["httpx", "sslcert"])
-for event in scan.start():
-    print(event.json())
-~~~
+if __name__ == "__main__":
+    scan = Scanner("evilcorp.com", presets=["subdomain-enum"])
+    for event in scan.start():
+        print(event)
+```
 
-# Output
-By default, BBOT saves its output in TXT, JSON, and CSV formats. To enable more output modules, you can use `--output-module`.
-~~~bash
-# tee to a file
-bbot -f subdomain-enum -t evilcorp.com | tee evilcorp.txt
+#### Asynchronous
+```python
+from bbot.scanner import Scanner
 
-# output to JSON
-bbot --output-module json -f subdomain-enum -t evilcorp.com | jq
+async def main():
+    scan = Scanner("evilcorp.com", presets=["subdomain-enum"])
+    async for event in scan.async_start():
+        print(event.json())
 
-# output asset inventory in current directory
-bbot -o . --output-module asset_inventory -f subdomain-enum -t evilcorp.com
-~~~
-For every scan, BBOT generates a unique and mildly-entertaining name like `demonic_jimmy`. Output for that scan, including the word cloud and any gowitness screenshots, etc., are saved to a folder by that name in `~/.bbot/scans`. The most recent 20 scans are kept, and older ones are removed. You can change the location of BBOT's output with `--output`, and you can also pick a custom scan name with `--name`.
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(main())
+```
 
-If you reuse a scan name, it will append to its original output files and leverage the previous word cloud.
+<details>
+<summary><b>SEE: This Nefarious Discord Bot</b></summary>
 
-# Neo4j
-Neo4j is the funnest (and prettiest) way to view and interact with BBOT data.
+A [BBOT Discord Bot](https://www.blacklanternsecurity.com/bbot/Stable/dev/#discord-bot-example) that responds to the `/scan` command. Scan the internet from the comfort of your discord server!
 
-![neo4j](https://user-images.githubusercontent.com/20261699/182398274-729f3c48-c23c-4db0-8c2e-8b403c1bf790.png)
+![bbot-discord](https://github.com/blacklanternsecurity/bbot/assets/20261699/22b268a2-0dfd-4c2a-b7c5-548c0f2cc6f9)
 
-- You can get Neo4j up and running with a single docker command:
-~~~bash
-docker run -p 7687:7687 -p 7474:7474 -v "$(pwd)/data/:/data/" -e NEO4J_AUTH=neo4j/bbotislife neo4j
-~~~
-- After that, run bbot with `--output-modules neo4j`
-~~~bash
-bbot -f subdomain-enum -t evilcorp.com --output-modules neo4j
-~~~
-- Browse data at http://localhost:7474
+</details>
 
-# Usage
-~~~
-$ bbot --help
-usage: bbot [-h] [--help-all] [-t TARGET [TARGET ...]] [-w WHITELIST [WHITELIST ...]] [-b BLACKLIST [BLACKLIST ...]] [--strict-scope] [-n SCAN_NAME] [-m MODULE [MODULE ...]] [-l] [-em MODULE [MODULE ...]]
-            [-f FLAG [FLAG ...]] [-rf FLAG [FLAG ...]] [-ef FLAG [FLAG ...]] [-om MODULE [MODULE ...]] [-o DIR] [-c [CONFIG ...]] [--allow-deadly] [-v] [-d] [-s] [--force] [-y] [--dry-run] [--current-config]
-            [--save-wordcloud FILE] [--load-wordcloud FILE] [--no-deps | --force-deps | --retry-deps | --ignore-failed-deps | --install-all-deps] [-a] [--version]
+## Feature Overview
 
-Bighuge BLS OSINT Tool
+- Support for Multiple Targets
+- Web Screenshots
+- Suite of Offensive Web Modules
+- NLP-powered Subdomain Mutations
+- Native Output to Neo4j (and more)
+- Automatic dependency install with Ansible
+- Search entire attack surface with custom YARA rules
+- Python API + Developer Documentation
 
-options:
-  -h, --help            show this help message and exit
-  --help-all            Display full help including module config options
-  -n SCAN_NAME, --name SCAN_NAME
-                        Name of scan (default: random)
-  -m MODULE [MODULE ...], --modules MODULE [MODULE ...]
-                        Modules to enable. Choices: affiliates,anubisdb,asn,azure_tenant,badsecrets,bevigil,binaryedge,bucket_aws,bucket_azure,bucket_digitalocean,bucket_firebase,bucket_gcp,builtwith,bypass403,c99,censys,certspotter,crobat,crt,dnscommonsrv,dnsdumpster,dnszonetransfer,emailformat,ffuf,ffuf_shortnames,fingerprintx,fullhunt,generic_ssrf,github,gowitness,hackertarget,host_header,httpx,hunt,hunterio,iis_shortnames,ipneighbor,ipstack,leakix,masscan,massdns,naabu,ntlm,nuclei,otx,paramminer_cookies,paramminer_getparams,paramminer_headers,passivetotal,pgp,rapiddns,riddler,robots,secretsdb,securitytrails,shodan_dns,skymem,smuggler,social,sslcert,subdomain_hijack,sublist3r,telerik,threatminer,url_manipulation,urlscan,vhost,viewdns,virustotal,wafw00f,wappalyzer,wayback,zoomeye
-  -l, --list-modules    List available modules.
-  -em MODULE [MODULE ...], --exclude-modules MODULE [MODULE ...]
-                        Exclude these modules.
-  -f FLAG [FLAG ...], --flags FLAG [FLAG ...]
-                        Enable modules by flag. Choices: active,affiliates,aggressive,cloud-enum,deadly,email-enum,iis-shortnames,passive,portscan,report,safe,service-enum,slow,social-enum,subdomain-enum,subdomain-hijack,web-basic,web-paramminer,web-screenshots,web-thorough
-  -rf FLAG [FLAG ...], --require-flags FLAG [FLAG ...]
-                        Disable modules that don't have these flags (e.g. -rf passive)
-  -ef FLAG [FLAG ...], --exclude-flags FLAG [FLAG ...]
-                        Disable modules with these flags. (e.g. -ef aggressive)
-  -om MODULE [MODULE ...], --output-modules MODULE [MODULE ...]
-                        Output module(s). Choices: asset_inventory,csv,http,human,json,neo4j,python,web_report,websocket
-  -o DIR, --output-dir DIR
-  -c [CONFIG ...], --config [CONFIG ...]
-                        custom config file, or configuration options in key=value format: 'modules.shodan.api_key=1234'
-  --allow-deadly        Enable the use of highly aggressive modules
-  -v, --verbose         Be more verbose
-  -d, --debug           Enable debugging
-  -s, --silent          Be quiet
-  --force               Run scan even if module setups fail
-  -y, --yes             Skip scan confirmation prompt
-  --dry-run             Abort before executing scan
-  --current-config      Show current config in YAML format
+## Targets
 
-Target:
-  -t TARGET [TARGET ...], --targets TARGET [TARGET ...]
-                        Targets to seed the scan
-  -w WHITELIST [WHITELIST ...], --whitelist WHITELIST [WHITELIST ...]
-                        What's considered in-scope (by default it's the same as --targets)
-  -b BLACKLIST [BLACKLIST ...], --blacklist BLACKLIST [BLACKLIST ...]
-                        Don't touch these things
-  --strict-scope        Don't consider subdomains of target/whitelist to be in-scope
+BBOT accepts an unlimited number of targets via `-t`. You can specify targets either directly on the command line or in files (or both!):
 
-Word cloud:
-  Save/load wordlist of common words gathered during a scan
+```bash
+bbot -t evilcorp.com evilcorp.org 1.2.3.0/24 -p subdomain-enum
+```
 
-  --save-wordcloud FILE
-                        Output wordcloud to custom file when the scan completes
-  --load-wordcloud FILE
-                        Load wordcloud from a custom file
+Targets can be any of the following:
 
-Module dependencies:
-  Control how modules install their dependencies
+- `DNS_NAME` (`evilcorp.com`)
+- `IP_ADDRESS` (`1.2.3.4`)
+- `IP_RANGE` (`1.2.3.0/24`)
+- `OPEN_TCP_PORT` (`192.168.0.1:80`)
+- `URL` (`https://www.evilcorp.com`)
 
-  --no-deps             Don't install module dependencies
-  --force-deps          Force install all module dependencies
-  --retry-deps          Try again to install failed module dependencies
-  --ignore-failed-deps  Run modules even if they have failed dependencies
-  --install-all-deps    Install dependencies for all modules
+For more information, see [Targets](https://www.blacklanternsecurity.com/bbot/Stable/scanning/#targets-t). To learn how BBOT handles scope, see [Scope](https://www.blacklanternsecurity.com/bbot/Stable/scanning/#scope).
 
-Agent:
-  Report back to a central server
+## API Keys
 
-  -a, --agent-mode      Start in agent mode
+Similar to Amass or Subfinder, BBOT supports API keys for various third-party services such as SecurityTrails, etc.
 
-Misc:
-  --version             show BBOT version and exit
-~~~
-
-# BBOT Config
-BBOT loads its config from these places in the following order:
-
-- `~/.config/bbot/bbot.yml` <-- Use this one as your main config
-- `~/.config/bbot/secrets.yml` <-- Use this one for sensitive stuff like API keys
-- command line (`--config`)
-
-These config files will be automatically created for you when you first run BBOT.
-
-Command-line arguments take precedence over all others. You can give BBOT a custom config file with `--config myconf.yml`, or individual arguments like this: `--config http_proxy=http://127.0.0.1:8080 modules.shodan_dns.api_key=1234`. To display the full and current BBOT config, including any command-line arguments, use `bbot --current-config`.
-
-Note that placing the following in `bbot.yml`:
+The standard way to do this is to enter your API keys in **`~/.config/bbot/bbot.yml`**. Note that multiple API keys are allowed:
 ```yaml
 modules:
-  shodan:
-    api_key: deadbeef
+  shodan_dns:
+    api_key: 4f41243847da693a4f356c0486114bc6
+  c99:
+    # multiple API keys
+    api_key:
+      - 21a270d5f59c9b05813a72bb41707266
+      - ea8f243d9885cf8ce9876a580224fd3c
+      - 5bc6ed268ab6488270e496d3183a1a27
+  virustotal:
+    api_key: dd5f0eee2e4a99b71a939bded450b246
+  securitytrails:
+    api_key: d9a05c3fd9a514497713c54b4455d0b0
 ```
-Is the same as:
+
+If you like, you can also specify them on the command line:
 ```bash
-bbot --config modules.shodan.api_key=deadbeef
+bbot -c modules.virustotal.api_key=dd5f0eee2e4a99b71a939bded450b246
 ```
 
-For explanations of config options, see `defaults.yml` or the [wiki](https://github.com/blacklanternsecurity/bbot/wiki#yaml-config)
+For details, see [Configuration](https://www.blacklanternsecurity.com/bbot/Stable/scanning/configuration/).
 
-# Modules
+## Complete Lists of Modules, Flags, etc.
 
-### Note: You can find more fun and interesting modules at the [Module Playground](https://github.com/blacklanternsecurity/bbot-module-playground). For instructions on how to install these other modules, see the [wiki](https://github.com/blacklanternsecurity/bbot/wiki#module-playground).
+- Complete list of [Modules](https://www.blacklanternsecurity.com/bbot/Stable/modules/list_of_modules/).
+- Complete list of [Flags](https://www.blacklanternsecurity.com/bbot/Stable/scanning/#list-of-flags).
+- Complete list of [Presets](https://www.blacklanternsecurity.com/bbot/Stable/scanning/presets_list/).
+    - Complete list of [Global Config Options](https://www.blacklanternsecurity.com/bbot/Stable/scanning/configuration/#global-config-options).
+    - Complete list of [Module Config Options](https://www.blacklanternsecurity.com/bbot/Stable/scanning/configuration/#module-config-options).
 
-To see modules' options (how to change wordlists, thread count, etc.), use `--help-all`.
+## Documentation
 
-~~~
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| Module               | Type     | Needs   | Description                              | Flags                                    | Produced Events                          |
-|                      |          | API     |                                          |                                          |                                          |
-|                      |          | Key     |                                          |                                          |                                          |
-+======================+==========+=========+==========================================+==========================================+==========================================+
-| badsecrets           | scan     |         | Library for detecting known or weak      | active,safe,web-basic,web-thorough       | FINDING,VULNERABILITY                    |
-|                      |          |         | secrets across many web frameworks       |                                          |                                          |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| bucket_aws           | scan     |         | Check for S3 buckets related to target   | active,cloud-enum,safe,web-basic,web-    | FINDING,STORAGE_BUCKET                   |
-|                      |          |         |                                          | thorough                                 |                                          |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| bucket_azure         | scan     |         | Check for Azure storage blobs related to | active,cloud-enum,safe,web-basic,web-    | FINDING,STORAGE_BUCKET                   |
-|                      |          |         | target                                   | thorough                                 |                                          |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| bucket_digitalocean  | scan     |         | Check for DigitalOcean spaces related to | active,cloud-enum,safe,slow,web-thorough | FINDING,STORAGE_BUCKET                   |
-|                      |          |         | target                                   |                                          |                                          |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| bucket_firebase      | scan     |         | Check for open Firebase databases        | active,cloud-enum,safe,web-basic,web-    | FINDING,STORAGE_BUCKET                   |
-|                      |          |         | related to target                        | thorough                                 |                                          |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| bucket_gcp           | scan     |         | Check for Google object storage related  | active,cloud-enum,safe,web-basic,web-    | FINDING,STORAGE_BUCKET                   |
-|                      |          |         | to target                                | thorough                                 |                                          |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| bypass403            | scan     |         | Check 403 pages for common bypasses      | active,aggressive,web-thorough           | FINDING                                  |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| dnszonetransfer      | scan     |         | Attempt DNS zone transfers               | active,safe,subdomain-enum               | DNS_NAME                                 |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| ffuf                 | scan     |         | A fast web fuzzer written in Go          | active,aggressive,deadly                 | URL_UNVERIFIED                           |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| ffuf_shortnames      | scan     |         | Use ffuf in combination IIS shortnames   | active,aggressive,iis-shortnames,web-    | URL_UNVERIFIED                           |
-|                      |          |         |                                          | thorough                                 |                                          |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| fingerprintx         | scan     |         | Fingerprint exposed services like RDP,   | active,safe,service-enum,slow            | PROTOCOL                                 |
-|                      |          |         | SSH, MySQL, etc.                         |                                          |                                          |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| generic_ssrf         | scan     |         | Check for generic SSRFs                  | active,aggressive,web-thorough           | VULNERABILITY                            |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| gowitness            | scan     |         | Take screenshots of webpages             | active,safe,web-screenshots              | TECHNOLOGY,URL,URL_UNVERIFIED,WEBSCREENS |
-|                      |          |         |                                          |                                          | HOT                                      |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| host_header          | scan     |         | Try common HTTP Host header spoofing     | active,aggressive,web-thorough           | FINDING                                  |
-|                      |          |         | techniques                               |                                          |                                          |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| httpx                | scan     |         | Visit webpages. Many other modules rely  | active,cloud-enum,safe,social-           | HTTP_RESPONSE,URL                        |
-|                      |          |         | on httpx                                 | enum,subdomain-enum,web-basic,web-       |                                          |
-|                      |          |         |                                          | thorough                                 |                                          |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| hunt                 | scan     |         | Watch for commonly-exploitable HTTP      | active,safe,web-basic,web-thorough       | FINDING                                  |
-|                      |          |         | parameters                               |                                          |                                          |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| iis_shortnames       | scan     |         | Check for IIS shortname vulnerability    | active,iis-shortnames,safe,web-          | URL_HINT                                 |
-|                      |          |         |                                          | basic,web-thorough                       |                                          |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| masscan              | scan     |         | Port scan IP subnets with masscan        | active,aggressive,portscan               | OPEN_TCP_PORT                            |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| naabu                | scan     |         | Execute port scans with naabu            | active,aggressive,portscan,web-thorough  | OPEN_TCP_PORT                            |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| ntlm                 | scan     |         | Watch for HTTP endpoints that support    | active,safe,web-basic,web-thorough       | DNS_NAME,FINDING                         |
-|                      |          |         | NTLM authentication                      |                                          |                                          |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| nuclei               | scan     |         | Fast and customisable vulnerability      | active,aggressive,deadly                 | FINDING,VULNERABILITY                    |
-|                      |          |         | scanner                                  |                                          |                                          |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| paramminer_cookies   | scan     |         | Smart brute-force to check for common    | active,aggressive,slow,web-paramminer    | FINDING                                  |
-|                      |          |         | HTTP cookie parameters                   |                                          |                                          |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| paramminer_getparams | scan     |         | Use smart brute-force to check for       | active,aggressive,slow,web-paramminer    | FINDING                                  |
-|                      |          |         | common HTTP GET parameters               |                                          |                                          |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| paramminer_headers   | scan     |         | Use smart brute-force to check for       | active,aggressive,slow,web-paramminer    | FINDING                                  |
-|                      |          |         | common HTTP header parameters            |                                          |                                          |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| robots               | scan     |         | Look for and parse robots.txt            | active,safe,web-basic,web-thorough       | URL_UNVERIFIED                           |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| secretsdb            | scan     |         | Detect common secrets with secrets-      | active,safe,web-basic,web-thorough       | FINDING                                  |
-|                      |          |         | patterns-db                              |                                          |                                          |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| smuggler             | scan     |         | Check for HTTP smuggling                 | active,aggressive,slow,web-thorough      | FINDING                                  |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| social               | scan     |         | Look for social media links in webpages  | active,safe,social-enum                  | SOCIAL                                   |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| sslcert              | scan     |         | Visit open ports and retrieve SSL        | active,affiliates,email-                 | DNS_NAME,EMAIL_ADDRESS                   |
-|                      |          |         | certificates                             | enum,safe,subdomain-enum,web-basic,web-  |                                          |
-|                      |          |         |                                          | thorough                                 |                                          |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| subdomain_hijack     | scan     |         | Detect hijackable subdomains             | active,cloud-enum,safe,subdomain-        | FINDING                                  |
-|                      |          |         |                                          | enum,subdomain-hijack,web-basic,web-     |                                          |
-|                      |          |         |                                          | thorough                                 |                                          |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| telerik              | scan     |         | Scan for critical Telerik                | active,aggressive,slow,web-thorough      | FINDING,VULNERABILITY                    |
-|                      |          |         | vulnerabilities                          |                                          |                                          |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| url_manipulation     | scan     |         | Attempt to identify URL parsing/routing  | active,aggressive,web-thorough           | FINDING                                  |
-|                      |          |         | based vulnerabilities                    |                                          |                                          |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| vhost                | scan     |         | Fuzz for virtual hosts                   | active,aggressive,deadly,slow            | DNS_NAME,VHOST                           |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| wafw00f              | scan     |         | Web Application Firewall Fingerprinting  | active,aggressive                        | WAF                                      |
-|                      |          |         | Tool                                     |                                          |                                          |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| wappalyzer           | scan     |         | Extract technologies from web responses  | active,safe,web-basic,web-thorough       | TECHNOLOGY                               |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| affiliates           | scan     |         | Summarize affiliate domains at the end   | passive,report,safe                      |                                          |
-|                      |          |         | of a scan                                |                                          |                                          |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| anubisdb             | scan     |         | Query jldc.me's database for subdomains  | passive,safe,subdomain-enum              | DNS_NAME                                 |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| asn                  | scan     |         | Query ripe and bgpview.io for ASNs       | passive,report,safe,subdomain-enum       | ASN                                      |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| azure_tenant         | scan     |         | Query Azure for tenant sister domains    | affiliates,passive,safe,subdomain-enum   | DNS_NAME                                 |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| bevigil              | scan     | X       | Retrieve OSINT data from mobile          | passive,safe,subdomain-enum              | DNS_NAME,URL_UNVERIFIED                  |
-|                      |          |         | applications using BeVigil               |                                          |                                          |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| binaryedge           | scan     | X       | Query the BinaryEdge API                 | passive,safe,subdomain-enum              | DNS_NAME                                 |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| builtwith            | scan     | X       | Query Builtwith.com for subdomains       | affiliates,passive,safe,subdomain-enum   | DNS_NAME                                 |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| c99                  | scan     | X       | Query the C99 API for subdomains         | passive,safe,subdomain-enum              | DNS_NAME                                 |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| censys               | scan     | X       | Query the Censys API                     | email-enum,passive,safe,subdomain-enum   | DNS_NAME,EMAIL_ADDRESS,IP_ADDRESS,OPEN_P |
-|                      |          |         |                                          |                                          | ORT,PROTOCOL                             |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| certspotter          | scan     |         | Query Certspotter's API for subdomains   | passive,safe,subdomain-enum              | DNS_NAME                                 |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| crobat               | scan     |         | Query Project Crobat for subdomains      | passive,safe                             | DNS_NAME                                 |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| crt                  | scan     |         | Query crt.sh (certificate transparency)  | passive,safe,subdomain-enum              | DNS_NAME                                 |
-|                      |          |         | for subdomains                           |                                          |                                          |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| dnscommonsrv         | scan     |         | Check for common SRV records             | passive,safe,subdomain-enum              | DNS_NAME                                 |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| dnsdumpster          | scan     |         | Query dnsdumpster for subdomains         | passive,safe,subdomain-enum              | DNS_NAME                                 |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| emailformat          | scan     |         | Query email-format.com for email         | email-enum,passive,safe                  | EMAIL_ADDRESS                            |
-|                      |          |         | addresses                                |                                          |                                          |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| fullhunt             | scan     | X       | Query the fullhunt.io API for subdomains | passive,safe,subdomain-enum              | DNS_NAME                                 |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| github               | scan     | X       | Query Github's API for related           | passive,safe,subdomain-enum              | URL_UNVERIFIED                           |
-|                      |          |         | repositories                             |                                          |                                          |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| hackertarget         | scan     |         | Query the hackertarget.com API for       | passive,safe,subdomain-enum              | DNS_NAME                                 |
-|                      |          |         | subdomains                               |                                          |                                          |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| hunterio             | scan     | X       | Query hunter.io for emails               | email-enum,passive,safe,subdomain-enum   | DNS_NAME,EMAIL_ADDRESS,URL_UNVERIFIED    |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| ipneighbor           | scan     |         | Look beside IPs in their surrounding     | aggressive,passive,subdomain-enum        | IP_ADDRESS                               |
-|                      |          |         | subnet                                   |                                          |                                          |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| ipstack              | scan     | X       | Query IPStack's API for GeoIP            | passive,safe                             | GEOLOCATION                              |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| leakix               | scan     |         | Query leakix.net for subdomains          | passive,safe,subdomain-enum              | DNS_NAME                                 |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| massdns              | scan     |         | Brute-force subdomains with massdns      | aggressive,passive,slow,subdomain-enum   | DNS_NAME                                 |
-|                      |          |         | (highly effective)                       |                                          |                                          |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| otx                  | scan     |         | Query otx.alienvault.com for subdomains  | passive,safe,subdomain-enum              | DNS_NAME                                 |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| passivetotal         | scan     | X       | Query the PassiveTotal API for           | passive,safe,subdomain-enum              | DNS_NAME                                 |
-|                      |          |         | subdomains                               |                                          |                                          |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| pgp                  | scan     |         | Query common PGP servers for email       | email-enum,passive,safe                  | EMAIL_ADDRESS                            |
-|                      |          |         | addresses                                |                                          |                                          |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| rapiddns             | scan     |         | Query rapiddns.io for subdomains         | passive,safe,subdomain-enum              | DNS_NAME                                 |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| riddler              | scan     |         | Query riddler.io for subdomains          | passive,safe,subdomain-enum              | DNS_NAME                                 |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| securitytrails       | scan     | X       | Query the SecurityTrails API for         | passive,safe,subdomain-enum              | DNS_NAME                                 |
-|                      |          |         | subdomains                               |                                          |                                          |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| shodan_dns           | scan     | X       | Query Shodan for subdomains              | passive,safe,subdomain-enum              | DNS_NAME                                 |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| skymem               | scan     |         | Query skymem.info for email addresses    | email-enum,passive,safe                  | EMAIL_ADDRESS                            |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| sublist3r            | scan     |         | Query sublist3r's API for subdomains     | passive,safe                             | DNS_NAME                                 |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| threatminer          | scan     |         | Query threatminer's API for subdomains   | passive,safe,subdomain-enum              | DNS_NAME                                 |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| urlscan              | scan     |         | Query urlscan.io for subdomains          | passive,safe,subdomain-enum              | DNS_NAME,URL_UNVERIFIED                  |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| viewdns              | scan     |         | Query viewdns.info's reverse whois for   | affiliates,passive,safe                  | DNS_NAME                                 |
-|                      |          |         | related domains                          |                                          |                                          |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| virustotal           | scan     | X       | Query VirusTotal's API for subdomains    | passive,safe,subdomain-enum              | DNS_NAME                                 |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| wayback              | scan     |         | Query archive.org's API for subdomains   | passive,safe,subdomain-enum              | DNS_NAME,URL_UNVERIFIED                  |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| zoomeye              | scan     | X       | Query ZoomEye's API for subdomains       | affiliates,passive,safe,subdomain-enum   | DNS_NAME                                 |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| asset_inventory      | output   |         | Output to an asset inventory style       |                                          |                                          |
-|                      |          |         | flattened CSV file                       |                                          |                                          |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| csv                  | output   |         | Output to CSV                            |                                          |                                          |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| http                 | output   |         | Send every event to a custom URL via a   |                                          |                                          |
-|                      |          |         | web request                              |                                          |                                          |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| human                | output   |         | Output to text                           |                                          |                                          |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| json                 | output   |         | Output to JSON                           |                                          |                                          |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| neo4j                | output   |         | Output to Neo4j                          |                                          |                                          |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| python               | output   |         | Output via Python API                    |                                          |                                          |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| web_report           | output   |         | Create a markdown report with web assets |                                          |                                          |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| websocket            | output   |         | Output to websockets                     |                                          |                                          |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| aggregate            | internal |         | Summarize statistics at the end of a     | passive,safe                             |                                          |
-|                      |          |         | scan                                     |                                          |                                          |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| excavate             | internal |         | Passively extract juicy tidbits from     | passive                                  | URL_UNVERIFIED                           |
-|                      |          |         | scan data                                |                                          |                                          |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-| speculate            | internal |         | Derive certain event types from others   | passive                                  | DNS_NAME,FINDING,IP_ADDRESS,OPEN_TCP_POR |
-|                      |          |         | by common sense                          |                                          | T                                        |
-+----------------------+----------+---------+------------------------------------------+------------------------------------------+------------------------------------------+
-~~~
+<!-- BBOT DOCS TOC -->
+- **User Manual**
+    - **Basics**
+        - [Getting Started](https://www.blacklanternsecurity.com/bbot/Stable/)
+        - [How it Works](https://www.blacklanternsecurity.com/bbot/Stable/how_it_works)
+        - [Comparison to Other Tools](https://www.blacklanternsecurity.com/bbot/Stable/comparison)
+    - **Scanning**
+        - [Scanning Overview](https://www.blacklanternsecurity.com/bbot/Stable/scanning/)
+        - **Presets**
+            - [Overview](https://www.blacklanternsecurity.com/bbot/Stable/scanning/presets)
+            - [List of Presets](https://www.blacklanternsecurity.com/bbot/Stable/scanning/presets_list)
+        - [Events](https://www.blacklanternsecurity.com/bbot/Stable/scanning/events)
+        - [Output](https://www.blacklanternsecurity.com/bbot/Stable/scanning/output)
+        - [Tips and Tricks](https://www.blacklanternsecurity.com/bbot/Stable/scanning/tips_and_tricks)
+        - [Advanced Usage](https://www.blacklanternsecurity.com/bbot/Stable/scanning/advanced)
+        - [Configuration](https://www.blacklanternsecurity.com/bbot/Stable/scanning/configuration)
+    - **Modules**
+        - [List of Modules](https://www.blacklanternsecurity.com/bbot/Stable/modules/list_of_modules)
+        - [Nuclei](https://www.blacklanternsecurity.com/bbot/Stable/modules/nuclei)
+        - [Custom YARA Rules](https://www.blacklanternsecurity.com/bbot/Stable/modules/custom_yara_rules)
+    - **Misc**
+        - [Contribution](https://www.blacklanternsecurity.com/bbot/Stable/contribution)
+        - [Release History](https://www.blacklanternsecurity.com/bbot/Stable/release_history)
+        - [Troubleshooting](https://www.blacklanternsecurity.com/bbot/Stable/troubleshooting)
+- **Developer Manual**
+    - [Development Overview](https://www.blacklanternsecurity.com/bbot/Stable/dev/)
+    - [Setting Up a Dev Environment](https://www.blacklanternsecurity.com/bbot/Stable/dev/dev_environment)
+    - [BBOT Internal Architecture](https://www.blacklanternsecurity.com/bbot/Stable/dev/architecture)
+    - [How to Write a BBOT Module](https://www.blacklanternsecurity.com/bbot/Stable/dev/module_howto)
+    - [Unit Tests](https://www.blacklanternsecurity.com/bbot/Stable/dev/tests)
+    - [Discord Bot Example](https://www.blacklanternsecurity.com/bbot/Stable/dev/discord_bot)
+    - **Code Reference**
+        - [Scanner](https://www.blacklanternsecurity.com/bbot/Stable/dev/scanner)
+        - [Presets](https://www.blacklanternsecurity.com/bbot/Stable/dev/presets)
+        - [Event](https://www.blacklanternsecurity.com/bbot/Stable/dev/event)
+        - [Target](https://www.blacklanternsecurity.com/bbot/Stable/dev/target)
+        - [BaseModule](https://www.blacklanternsecurity.com/bbot/Stable/dev/basemodule)
+        - [BBOTCore](https://www.blacklanternsecurity.com/bbot/Stable/dev/core)
+        - [Engine](https://www.blacklanternsecurity.com/bbot/Stable/dev/engine)
+        - **Helpers**
+            - [Overview](https://www.blacklanternsecurity.com/bbot/Stable/dev/helpers/)
+            - [Command](https://www.blacklanternsecurity.com/bbot/Stable/dev/helpers/command)
+            - [DNS](https://www.blacklanternsecurity.com/bbot/Stable/dev/helpers/dns)
+            - [Interactsh](https://www.blacklanternsecurity.com/bbot/Stable/dev/helpers/interactsh)
+            - [Miscellaneous](https://www.blacklanternsecurity.com/bbot/Stable/dev/helpers/misc)
+            - [Web](https://www.blacklanternsecurity.com/bbot/Stable/dev/helpers/web)
+            - [Word Cloud](https://www.blacklanternsecurity.com/bbot/Stable/dev/helpers/wordcloud)
+<!-- END BBOT DOCS TOC -->
 
-# Credit
+## Contribution
 
-BBOT is written by @TheTechromancer. Web hacking in BBOT is made possible by @liquidsec, who wrote most of the web modules and helpers.
+Some of the best BBOT modules were written by the community. BBOT is being constantly improved; every day it grows more powerful!
 
-Very special thanks to the following people who made BBOT possible:
+We welcome contributions. Not just code, but ideas too! If you have an idea for a new feature, please let us know in [Discussions](https://github.com/blacklanternsecurity/bbot/discussions). If you want to get your hands dirty, see [Contribution](https://www.blacklanternsecurity.com/bbot/Stable/contribution/). There you can find setup instructions and a simple tutorial on how to write a BBOT module. We also have extensive [Developer Documentation](https://www.blacklanternsecurity.com/bbot/Stable/dev/).
 
-- @kerrymilan for his Neo4j and Ansible expertise
+Thanks to these amazing people for contributing to BBOT! :heart:
+
+<p align="center">
+<a href="https://github.com/blacklanternsecurity/bbot/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=blacklanternsecurity/bbot&max=500">
+</a>
+</p>
+
+Special thanks to:
+
+- @TheTechromancer for creating BBOT
+- @liquidsec for his extensive work on BBOT's web hacking features, including [badsecrets](https://github.com/blacklanternsecurity/badsecrets) and [baddns](https://github.com/blacklanternsecurity/baddns)
 - Steve Micallef (@smicallef) for creating Spiderfoot
-- Aleksei Kornev (@alekseiko) for allowing us ownership of the bbot Pypi repository <3
+- @kerrymilan for his Neo4j and Ansible expertise
+- @domwhewell-sage for his family of badass code-looting modules
+- @aconite33 and @amiremami for their ruthless testing
+- Aleksei Kornev (@alekseiko) for granting us ownership of the bbot Pypi repository <3

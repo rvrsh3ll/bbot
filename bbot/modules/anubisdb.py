@@ -1,18 +1,26 @@
-from .crobat import crobat
+from bbot.modules.templates.subdomain_enum import subdomain_enum
 
 
-class anubisdb(crobat):
+class anubisdb(subdomain_enum):
     flags = ["subdomain-enum", "passive", "safe"]
     watched_events = ["DNS_NAME"]
     produced_events = ["DNS_NAME"]
-    meta = {"description": "Query jldc.me's database for subdomains"}
+    meta = {
+        "description": "Query jldc.me's database for subdomains",
+        "created_date": "2022-10-04",
+        "author": "@TheTechromancer",
+    }
+    options = {"limit": 1000}
+    options_desc = {
+        "limit": "Limit the number of subdomains returned per query (increasing this may slow the scan due to garbage results from this API)"
+    }
 
     base_url = "https://jldc.me/anubis/subdomains"
     dns_abort_depth = 5
 
-    def request_url(self, query):
+    async def request_url(self, query):
         url = f"{self.base_url}/{self.helpers.quote(query)}"
-        return self.request_with_fail_count(url)
+        return await self.api_request(url)
 
     def abort_if_pre(self, hostname):
         """
@@ -24,11 +32,11 @@ class anubisdb(crobat):
             return True
         return False
 
-    def abort_if(self, event):
+    async def abort_if(self, event):
         # abort if dns name is unresolved
-        if not "resolved" in event.tags:
+        if event.type == "DNS_NAME_UNRESOLVED":
             return True, "DNS name is unresolved"
-        return super().abort_if(event)
+        return await super().abort_if(event)
 
     def parse_results(self, r, query):
         results = set()
@@ -36,6 +44,9 @@ class anubisdb(crobat):
         if json:
             for hostname in json:
                 hostname = str(hostname).lower()
-                if hostname.endswith(f".{query}") and not self.abort_if_pre(hostname):
+                in_scope = hostname.endswith(f".{query}")
+                is_ptr = self.helpers.is_ptr(hostname)
+                too_long = self.abort_if_pre(hostname)
+                if in_scope and not is_ptr and not too_long:
                     results.add(hostname)
-        return results
+        return sorted(results)[: self.config.get("limit", 1000)]

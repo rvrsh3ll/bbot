@@ -1,4 +1,3 @@
-# logging
-from .logger import init_logging
+from .core import BBOTCore
 
-logging_queue, logging_handlers = init_logging()
+CORE = BBOTCore()

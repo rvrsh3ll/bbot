@@ -1,5 +1,5 @@
+from bbot.errors import InteractshError
 from bbot.modules.base import BaseModule
-from bbot.core.errors import InteractshError
 
 
 ssrf_params = [
@@ -44,12 +44,12 @@ class BaseSubmodule:
         self.test_paths = self.create_paths()
 
     def set_base_url(self, event):
-        return f"{event.parsed.scheme}://{event.parsed.netloc}"
+        return f"{event.parsed_url.scheme}://{event.parsed_url.netloc}"
 
     def create_paths(self):
         return self.paths
 
-    def test(self, event):
+    async def test(self, event):
         base_url = self.set_base_url(event)
 
         for test_path in self.test_paths:
@@ -59,7 +59,7 @@ class BaseSubmodule:
             )
             test_url = f"{base_url}{test_path_prepared}"
             self.parent_module.debug(f"Sending request to URL: {test_url}")
-            r = self.parent_module.helpers.curl(url=test_url)
+            r = await self.parent_module.helpers.curl(url=test_url)
             if r:
                 self.process(event, r, subdomain_tag)
 
@@ -104,7 +104,7 @@ class Generic_SSRF_POST(BaseSubmodule):
     def set_base_url(self, event):
         return event.data
 
-    def test(self, event):
+    async def test(self, event):
         test_url = f"{event.data}"
 
         subdomain_tag = self.parent_module.helpers.rand_string(4, digits=False)
@@ -121,7 +121,7 @@ class Generic_SSRF_POST(BaseSubmodule):
         post_data_list = [(subdomain_tag, post_data), (subdomain_tag_lower, post_data_lower)]
 
         for tag, pd in post_data_list:
-            r = self.parent_module.helpers.curl(url=test_url, method="POST", post_data=pd)
+            r = await self.parent_module.helpers.curl(url=test_url, method="POST", post_data=pd)
             self.process(event, r, tag)
 
 
@@ -130,18 +130,18 @@ class Generic_XXE(BaseSubmodule):
     severity = "HIGH"
     paths = None
 
-    def test(self, event):
+    async def test(self, event):
         rand_entity = self.parent_module.helpers.rand_string(4, digits=False)
         subdomain_tag = self.parent_module.helpers.rand_string(4, digits=False)
 
         post_body = f"""<?xml version="1.0" encoding="ISO-8859-1"?>
 <!DOCTYPE foo [
 <!ELEMENT foo ANY >
-<!ENTITY % {rand_entity} SYSTEM "http://{subdomain_tag}.{self.parent_module.interactsh_domain}" >
+<!ENTITY {rand_entity} SYSTEM "http://{subdomain_tag}.{self.parent_module.interactsh_domain}" >
 ]>
 <foo>&{rand_entity};</foo>"""
-        test_url = f"{event.parsed.scheme}://{event.parsed.netloc}/"
-        r = self.parent_module.helpers.curl(
+        test_url = event.parsed_url.geturl()
+        r = await self.parent_module.helpers.curl(
             url=test_url, method="POST", raw_body=post_body, headers={"Content-type": "application/xml"}
         )
         if r:
@@ -152,12 +152,12 @@ class generic_ssrf(BaseModule):
     watched_events = ["URL"]
     produced_events = ["VULNERABILITY"]
     flags = ["active", "aggressive", "web-thorough"]
-    meta = {"description": "Check for generic SSRFs"}
+    meta = {"description": "Check for generic SSRFs", "created_date": "2022-07-30", "author": "@liquidsec"}
     in_scope_only = True
 
     deps_apt = ["curl"]
 
-    def setup(self):
+    async def setup(self):
         self.submodules = {}
         self.interactsh_subdomain_tags = {}
         self.severity = None
@@ -166,7 +166,7 @@ class generic_ssrf(BaseModule):
         if self.scan.config.get("interactsh_disable", False) == False:
             try:
                 self.interactsh_instance = self.helpers.interactsh()
-                self.interactsh_domain = self.interactsh_instance.register(callback=self.interactsh_callback)
+                self.interactsh_domain = await self.interactsh_instance.register(callback=self.interactsh_callback)
             except InteractshError as e:
                 self.warning(f"Interactsh failure: {e}")
                 return False
@@ -184,14 +184,11 @@ class generic_ssrf(BaseModule):
 
         return True
 
-    def handle_event(self, event):
-        self.test_submodules(self.submodules, event)
+    async def handle_event(self, event):
+        for s in self.submodules.values():
+            await s.test(event)
 
-    def test_submodules(self, submodules, event, **kwargs):
-        for s in submodules.values():
-            s.test(event, **kwargs)
-
-    def interactsh_callback(self, r):
+    async def interactsh_callback(self, r):
         full_id = r.get("full-id", None)
         if full_id:
             if "." in full_id:
@@ -203,7 +200,7 @@ class generic_ssrf(BaseModule):
                 matched_severity = match[2]
                 matched_read_response = str(match[3])
 
-                self.emit_event(
+                await self.emit_event(
                     {
                         "severity": matched_severity,
                         "host": str(matched_event.host),
@@ -212,18 +209,27 @@ class generic_ssrf(BaseModule):
                     },
                     "VULNERABILITY",
                     matched_event,
+                    context=f"{{module}} scanned {matched_event.data} and detected {{event.type}}: {matched_technique}",
                 )
             else:
                 # this is likely caused by something trying to resolve the base domain first and can be ignored
                 self.debug("skipping result because subdomain tag was missing")
 
-    def finish(self):
-        from time import sleep
+    async def cleanup(self):
+        if self.scan.config.get("interactsh_disable", False) == False:
+            try:
+                await self.interactsh_instance.deregister()
+                self.debug(
+                    f"successfully deregistered interactsh session with correlation_id {self.interactsh_instance.correlation_id}"
+                )
+            except InteractshError as e:
+                self.warning(f"Interactsh failure: {e}")
 
-        sleep(5)
-
-        try:
-            for r in self.interactsh_instance.poll():
-                self.interactsh_callback(r)
-        except InteractshError as e:
-            self.debug(f"Error in interact.sh: {e}")
+    async def finish(self):
+        if self.scan.config.get("interactsh_disable", False) == False:
+            await self.helpers.sleep(5)
+            try:
+                for r in await self.interactsh_instance.poll():
+                    await self.interactsh_callback(r)
+            except InteractshError as e:
+                self.debug(f"Error in interact.sh: {e}")

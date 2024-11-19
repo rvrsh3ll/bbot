@@ -1,53 +1,51 @@
-import select
-import socket
-import threading
-from OpenSSL import SSL
-from ssl import PROTOCOL_TLSv1
+import asyncio
+from OpenSSL import crypto
 from contextlib import suppress
 
+from bbot.errors import ValidationError
 from bbot.modules.base import BaseModule
-from bbot.core.errors import ValidationError
-from bbot.core.helpers.threadpool import NamedLock
+from bbot.core.helpers.async_helpers import NamedLock
+from bbot.core.helpers.web.ssl_context import ssl_context_noverify
 
 
 class sslcert(BaseModule):
     watched_events = ["OPEN_TCP_PORT"]
     produced_events = ["DNS_NAME", "EMAIL_ADDRESS"]
-    flags = ["affiliates", "subdomain-enum", "email-enum", "active", "safe", "web-basic", "web-thorough"]
+    flags = ["affiliates", "subdomain-enum", "email-enum", "active", "safe", "web-basic"]
     meta = {
         "description": "Visit open ports and retrieve SSL certificates",
+        "created_date": "2022-03-30",
+        "author": "@TheTechromancer",
     }
     options = {"timeout": 5.0, "skip_non_ssl": True}
     options_desc = {"timeout": "Socket connect timeout in seconds", "skip_non_ssl": "Don't try common non-SSL ports"}
     deps_apt = ["openssl"]
-    deps_pip = ["pyOpenSSL~=23.1.1"]
-    max_threads = 50
-    max_event_handlers = 25
+    deps_pip = ["pyOpenSSL~=24.0.0"]
+    _module_threads = 25
     scope_distance_modifier = 1
     _priority = 2
 
-    def setup(self):
+    async def setup(self):
         self.timeout = self.config.get("timeout", 5.0)
         self.skip_non_ssl = self.config.get("skip_non_ssl", True)
         self.non_ssl_ports = (22, 53, 80)
 
         # sometimes we run into a server with A LOT of SANs
         # these are usually stupid and useless, so we abort based on a different threshold
-        # depending on whether the source event is in scope
+        # depending on whether the parent event is in scope
         self.in_scope_abort_threshold = 50
         self.out_of_scope_abort_threshold = 10
 
         self.hosts_visited = set()
-        self.hosts_visited_lock = threading.Lock()
         self.ip_lock = NamedLock()
         return True
 
-    def filter_event(self, event):
+    async def filter_event(self, event):
         if self.skip_non_ssl and event.port in self.non_ssl_ports:
             return False, f"Port {event.port} doesn't typically use SSL"
         return True
 
-    def handle_event(self, event):
+    async def handle_event(self, event):
         _host = event.host
         if event.port:
             port = event.port
@@ -58,103 +56,105 @@ class sslcert(BaseModule):
         if self.helpers.is_ip(_host):
             hosts = [_host]
         else:
-            hosts = list(self.helpers.resolve(_host))
-
-        futures = {}
-        for host in hosts:
-            future = self.submit_task(self.visit_host, host, port)
-            futures[future] = host
+            hosts = list(await self.helpers.resolve(_host))
 
         if event.scope_distance == 0:
             abort_threshold = self.in_scope_abort_threshold
-            log_fn = self.info
         else:
             abort_threshold = self.out_of_scope_abort_threshold
-            log_fn = self.verbose
-        for future in self.helpers.as_completed(futures):
-            host = futures[future]
-            result = future.result()
-            if not isinstance(result, tuple) or not len(result) == 2:
+
+        tasks = [self.visit_host(host, port) for host in hosts]
+        async for task in self.helpers.as_completed(tasks):
+            result = await task
+            if not isinstance(result, tuple) or not len(result) == 3:
                 continue
-            dns_names, emails = result
+            dns_names, emails, (host, port) = result
             if len(dns_names) > abort_threshold:
                 netloc = self.helpers.make_netloc(host, port)
-                log_fn(
+                self.verbose(
                     f"Skipping Subject Alternate Names (SANs) on {netloc} because number of hostnames ({len(dns_names):,}) exceeds threshold ({abort_threshold})"
                 )
-                dns_names = dns_names[:1]
-            for event_type, results in (("DNS_NAME", dns_names), ("EMAIL_ADDRESS", emails)):
+                dns_names = dns_names[:1] + [n for n in dns_names[1:] if self.scan.in_scope(n)]
+            for event_type, results in (("DNS_NAME", set(dns_names)), ("EMAIL_ADDRESS", emails)):
                 for event_data in results:
                     if event_data is not None and event_data != event:
                         self.debug(f"Discovered new {event_type} via SSL certificate parsing: [{event_data}]")
                         try:
-                            ssl_event = self.make_event(event_data, event_type, source=event, raise_error=True)
+                            ssl_event = self.make_event(event_data, event_type, parent=event, raise_error=True)
+                            parent_event = ssl_event.get_parent()
+                            if parent_event.scope_distance == 0:
+                                tags = ["affiliate"]
+                            else:
+                                tags = None
                             if ssl_event:
-                                self.emit_event(ssl_event, on_success_callback=self.on_success_callback)
+                                await self.emit_event(
+                                    ssl_event,
+                                    tags=tags,
+                                    context=f"{{module}} parsed SSL certificate at {event.data} and found {{event.type}}: {{event.data}}",
+                                )
                         except ValidationError as e:
                             self.hugeinfo(f'Malformed {event_type} "{event_data}" at {event.data}')
                             self.debug(f"Invalid data at {host}:{port}: {e}")
 
     def on_success_callback(self, event):
-        source_scope_distance = event.get_source().scope_distance
-        if source_scope_distance == 0 and event.scope_distance > 0:
+        parent_scope_distance = event.get_parent().scope_distance
+        if parent_scope_distance == 0 and event.scope_distance > 0:
             event.add_tag("affiliate")
 
-    def visit_host(self, host, port):
+    async def visit_host(self, host, port):
         host = self.helpers.make_ip_type(host)
         netloc = self.helpers.make_netloc(host, port)
         host_hash = hash((host, port))
         dns_names = []
         emails = set()
-        with self.ip_lock.get_lock(host_hash):
-            with self.hosts_visited_lock:
-                if host_hash in self.hosts_visited:
-                    self.debug(f"Already processed {host} on port {port}, skipping")
-                    return [], []
-                else:
-                    self.hosts_visited.add(host_hash)
+        async with self.ip_lock.lock(host_hash):
+            if host_hash in self.hosts_visited:
+                self.debug(f"Already processed {host} on port {port}, skipping")
+                return [], [], (host, port)
+            else:
+                self.hosts_visited.add(host_hash)
 
-            socket_type = socket.AF_INET
-            if self.helpers.is_ip(host):
-                if host.version == 6:
-                    socket_type = socket.AF_INET6
             host = str(host)
+
+            # Connect to the host
             try:
-                sock = socket.socket(socket_type, socket.SOCK_STREAM)
+                transport, _ = await asyncio.wait_for(
+                    self.helpers.loop.create_connection(
+                        lambda: asyncio.Protocol(), host, port, ssl=ssl_context_noverify
+                    ),
+                    timeout=self.timeout,
+                )
+            except asyncio.TimeoutError:
+                self.debug(f"Timed out after {self.timeout} seconds while connecting to {netloc}")
+                return [], [], (host, port)
             except Exception as e:
-                self.warning(f"Error creating socket for {netloc}: {e}. Do you have IPv6 disabled?")
-                return [], []
-            sock.settimeout(self.timeout)
+                log_fn = self.warning
+                if isinstance(e, OSError):
+                    log_fn = self.debug
+                log_fn(f"Error connecting to {netloc}: {e}")
+                return [], [], (host, port)
+            finally:
+                with suppress(Exception):
+                    transport.close()
+
+            # Get the SSL object
             try:
-                context = SSL.Context(PROTOCOL_TLSv1)
-            except AttributeError as e:
-                # AttributeError: module 'lib' has no attribute 'SSL_CTX_set_ecdh_auto'
-                self.warning(f"Error creating SSL context: {e}")
-                return [], []
-            self.debug(f"Connecting to {host} on port {port}")
-            try:
-                sock.connect((host, port))
+                ssl_object = transport.get_extra_info("ssl_object")
             except Exception as e:
-                self.debug(f"Error connecting to {host} on port {port}: {e}")
-                return [], []
-            connection = SSL.Connection(context, sock)
-            connection.set_tlsext_host_name(self.helpers.smart_encode(host))
-            connection.set_connect_state()
+                self.verbose(f"Error getting ssl_object: {e}", trace=True)
+                return [], [], (host, port)
+
+            # Get the certificate
             try:
-                while 1:
-                    try:
-                        connection.do_handshake()
-                    except SSL.WantReadError:
-                        rd, _, _ = select.select([sock], [], [], sock.gettimeout())
-                        if not rd:
-                            raise SSL.Error("select timed out")
-                        continue
-                    break
+                der = ssl_object.getpeercert(binary_form=True)
             except Exception as e:
-                self.debug(f"Error with SSL handshake on {host} port {port}: {e}")
-                return [], []
-            cert = connection.get_peer_certificate()
-            sock.close()
+                self.verbose(f"Error getting peer cert: {e}", trace=True)
+                return [], [], (host, port)
+            try:
+                cert = crypto.load_certificate(crypto.FILETYPE_ASN1, der)
+            except Exception as e:
+                self.verbose(f"Error loading certificate: {e}", trace=True)
+                return [], [], (host, port)
             issuer = cert.get_issuer()
             if issuer.emailAddress and self.helpers.regexes.email_regex.match(issuer.emailAddress):
                 emails.add(issuer.emailAddress)
@@ -166,7 +166,7 @@ class sslcert(BaseModule):
             with suppress(KeyError):
                 dns_names.remove(common_name)
             dns_names = [common_name] + list(dns_names)
-        return dns_names, list(emails)
+        return dns_names, list(emails), (host, port)
 
     @staticmethod
     def get_cert_sans(cert):

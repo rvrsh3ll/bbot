@@ -1,28 +1,36 @@
-from bbot.modules.bucket_aws import bucket_aws
+from bbot.modules.templates.bucket import bucket_template
 
 
-class bucket_firebase(bucket_aws):
+class bucket_firebase(bucket_template):
     watched_events = ["DNS_NAME", "STORAGE_BUCKET"]
     produced_events = ["STORAGE_BUCKET", "FINDING"]
-    flags = ["active", "safe", "cloud-enum", "web-basic", "web-thorough"]
-    meta = {"description": "Check for open Firebase databases related to target"}
-    options = {"max_threads": 10, "permutations": False}
+    flags = ["active", "safe", "cloud-enum", "web-basic"]
+    meta = {
+        "description": "Check for open Firebase databases related to target",
+        "created_date": "2023-03-20",
+        "author": "@TheTechromancer",
+    }
+    options = {"permutations": False}
     options_desc = {
-        "max_threads": "Maximum number of threads for HTTP requests",
         "permutations": "Whether to try permutations",
     }
 
-    cloud_helper_name = "firebase"
+    cloud_helper_name = "google"
     delimiters = ("", "-")
     base_domains = ["firebaseio.com"]
 
-    def check_bucket_exists(self, bucket_name, url):
-        url = url.strip("/") + "/.json"
-        return super().check_bucket_exists(bucket_name, url)
+    def filter_bucket(self, event):
+        host = str(event.host)
+        if not any(host.endswith(f".{d}") for d in self.base_domains):
+            return False, "bucket belongs to a different cloud provider"
+        return True, ""
 
-    def check_bucket_open(self, bucket_name, url):
+    def build_url(self, bucket_name, base_domain, region):
+        return f"https://{bucket_name}.{base_domain}/.json"
+
+    async def check_bucket_open(self, bucket_name, url):
         url = url.strip("/") + "/.json"
-        response = self.helpers.request(url)
+        response = await self.helpers.request(url)
         tags = self.gen_tags_exists(response)
         status_code = getattr(response, "status_code", 404)
         msg = ""

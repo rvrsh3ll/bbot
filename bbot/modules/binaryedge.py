@@ -1,11 +1,16 @@
-from bbot.modules.shodan_dns import shodan_dns
+from bbot.modules.templates.subdomain_enum import subdomain_enum_apikey
 
 
-class binaryedge(shodan_dns):
+class binaryedge(subdomain_enum_apikey):
     watched_events = ["DNS_NAME"]
     produced_events = ["DNS_NAME"]
     flags = ["subdomain-enum", "passive", "safe"]
-    meta = {"description": "Query the BinaryEdge API", "auth_required": True}
+    meta = {
+        "description": "Query the BinaryEdge API",
+        "created_date": "2022-08-17",
+        "author": "@TheTechromancer",
+        "auth_required": True,
+    }
     options = {"api_key": "", "max_records": 1000}
     options_desc = {
         "api_key": "BinaryEdge API key",
@@ -14,20 +19,23 @@ class binaryedge(shodan_dns):
 
     base_url = "https://api.binaryedge.io/v2"
 
-    def setup(self):
+    async def setup(self):
         self.max_records = self.config.get("max_records", 1000)
-        self.headers = {"X-Key": self.config.get("api_key", "")}
-        return super().setup()
+        return await super().setup()
 
-    def ping(self):
+    def prepare_api_request(self, url, kwargs):
+        kwargs["headers"]["X-Key"] = self.api_key
+        return url, kwargs
+
+    async def ping(self):
         url = f"{self.base_url}/user/subscription"
-        j = self.request_with_fail_count(url, headers=self.headers).json()
+        j = (await self.api_request(url)).json()
         assert j.get("requests_left", 0) > 0
 
-    def request_url(self, query):
+    async def request_url(self, query):
         # todo: host query (certs + services)
         url = f"{self.base_url}/query/domains/subdomain/{self.helpers.quote(query)}"
-        return self.request_with_fail_count(url, headers=self.headers)
+        return await self.api_request(url)
 
     def parse_results(self, r, query):
         j = r.json()

@@ -1,12 +1,16 @@
+from bbot.errors import HttpCompareError
 from bbot.modules.base import BaseModule
-from bbot.core.errors import HttpCompareError
 
 
 class url_manipulation(BaseModule):
     watched_events = ["URL"]
     produced_events = ["FINDING"]
     flags = ["active", "aggressive", "web-thorough"]
-    meta = {"description": "Attempt to identify URL parsing/routing based vulnerabilities"}
+    meta = {
+        "description": "Attempt to identify URL parsing/routing based vulnerabilities",
+        "created_date": "2022-09-27",
+        "author": "@liquidsec",
+    }
     in_scope_only = True
 
     options = {"allow_redirects": True}
@@ -14,7 +18,7 @@ class url_manipulation(BaseModule):
         "allow_redirects": "Allowing redirects will sometimes create false positives. Disallowing will sometimes create false negatives. Allowed by default."
     }
 
-    def setup(self):
+    async def setup(self):
         # ([string]method,[string]path,[bool]strip trailing slash)
         self.signatures = []
 
@@ -38,7 +42,7 @@ class url_manipulation(BaseModule):
         self.allow_redirects = self.config.get("allow_redirects", True)
         return True
 
-    def handle_event(self, event):
+    async def handle_event(self, event):
         try:
             compare_helper = self.helpers.http_compare(
                 event.data, allow_redirects=self.allow_redirects, include_cache_buster=False
@@ -47,15 +51,21 @@ class url_manipulation(BaseModule):
             self.debug(e)
             return
 
-        if compare_helper.canary_check(event.data, mode="getparam") == False:
+        try:
+            if not await compare_helper.canary_check(event.data, mode="getparam"):
+                raise HttpCompareError()
+        except HttpCompareError:
             self.verbose(f'Aborting "{event.data}" due to failed canary check')
             return
 
         for sig in self.signatures:
             sig = self.format_signature(sig, event)
-            match, reasons, reflection, subject_response = compare_helper.compare(
-                sig[1], method=sig[0], allow_redirects=self.allow_redirects
-            )
+            try:
+                match, reasons, reflection, subject_response = await compare_helper.compare(
+                    sig[1], method=sig[0], allow_redirects=self.allow_redirects
+                )
+            except HttpCompareError as e:
+                self.debug(f"Encountered HttpCompareError: [{e}] for URL [{event.data}]")
 
             if subject_response:
                 subject_content = "".join([str(x) for x in subject_response.headers])
@@ -68,17 +78,18 @@ class url_manipulation(BaseModule):
                             if "body" in reasons:
                                 reported_signature = f"Modified URL: {sig[1]}"
                                 description = f"Url Manipulation: [{','.join(reasons)}] Sig: [{reported_signature}]"
-                                self.emit_event(
+                                await self.emit_event(
                                     {"description": description, "host": str(event.host), "url": event.data},
                                     "FINDING",
-                                    source=event,
+                                    parent=event,
+                                    context=f"{{module}} probed {event.data} and identified {{event.type}}: {description}",
                                 )
                         else:
                             self.debug(f"Status code changed to {str(subject_response.status_code)}, ignoring")
                 else:
                     self.debug("Ignoring positive result due to presence of parameter name in result")
 
-    def filter_event(self, event):
+    async def filter_event(self, event):
         accepted_status_codes = ["200", "301", "302"]
 
         for c in accepted_status_codes:
@@ -88,10 +99,10 @@ class url_manipulation(BaseModule):
 
     def format_signature(self, sig, event):
         if sig[2] == True:
-            cleaned_path = event.parsed.path.strip("/")
+            cleaned_path = event.parsed_url.path.strip("/")
         else:
-            cleaned_path = event.parsed.path.lstrip("/")
+            cleaned_path = event.parsed_url.path.lstrip("/")
 
-        kwargs = {"scheme": event.parsed.scheme, "netloc": event.parsed.netloc, "path": cleaned_path}
+        kwargs = {"scheme": event.parsed_url.scheme, "netloc": event.parsed_url.netloc, "path": cleaned_path}
         formatted_url = sig[1].format(**kwargs)
         return (sig[0], formatted_url)

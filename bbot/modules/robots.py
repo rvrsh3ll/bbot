@@ -4,8 +4,8 @@ from bbot.modules.base import BaseModule
 class robots(BaseModule):
     watched_events = ["URL"]
     produced_events = ["URL_UNVERIFIED"]
-    flags = ["active", "safe", "web-basic", "web-thorough"]
-    meta = {"description": "Look for and parse robots.txt"}
+    flags = ["active", "safe", "web-basic"]
+    meta = {"description": "Look for and parse robots.txt", "created_date": "2023-02-01", "author": "@liquidsec"}
 
     options = {"include_sitemap": False, "include_allow": True, "include_disallow": True}
     options_desc = {
@@ -15,24 +15,16 @@ class robots(BaseModule):
     }
 
     in_scope_only = True
+    per_hostport_only = True
 
-    def setup(self):
-        self.scanned_hosts = set()
+    async def setup(self):
         return True
 
-    def handle_event(self, event):
-        parsed_host = event.parsed
-        host = f"{parsed_host.scheme}://{parsed_host.netloc}/"
-        host_hash = hash(host)
-        if host_hash in self.scanned_hosts:
-            self.debug(f"Host {host} was already scanned, exiting")
-            return
-        else:
-            self.scanned_hosts.add(host_hash)
-
+    async def handle_event(self, event):
+        host = f"{event.parsed_url.scheme}://{event.parsed_url.netloc}/"
         result = None
         url = f"{host}robots.txt"
-        result = self.helpers.request(url)
+        result = await self.helpers.request(url)
         if result:
             body = result.text
 
@@ -52,8 +44,10 @@ class robots(BaseModule):
                             unverified_url = split_l[1]
                         else:
                             continue
-
-                        tags = []
-                        if self.is_spider_danger(event, unverified_url):
-                            tags.append("spider-danger")
-                        self.emit_event(unverified_url, "URL_UNVERIFIED", source=event, tags=tags)
+                        await self.emit_event(
+                            unverified_url,
+                            "URL_UNVERIFIED",
+                            parent=event,
+                            tags=["spider-danger"],
+                            context=f"{{module}} found robots.txt at {url} and extracted {{event.type}}: {{event.data}}",
+                        )

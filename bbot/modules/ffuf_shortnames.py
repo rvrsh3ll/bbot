@@ -32,7 +32,11 @@ class ffuf_shortnames(ffuf):
     watched_events = ["URL_HINT"]
     produced_events = ["URL_UNVERIFIED"]
     flags = ["aggressive", "active", "iis-shortnames", "web-thorough"]
-    meta = {"description": "Use ffuf in combination IIS shortnames"}
+    meta = {
+        "description": "Use ffuf in combination IIS shortnames",
+        "created_date": "2022-07-05",
+        "author": "@liquidsec",
+    }
 
     options = {
         "wordlist": "",  # default is defined within setup function
@@ -43,52 +47,47 @@ class ffuf_shortnames(ffuf):
         "extensions": "",
         "ignore_redirects": True,
         "find_common_prefixes": False,
-        "find_delimeters": True,
+        "find_delimiters": True,
     }
 
     options_desc = {
         "wordlist": "Specify wordlist to use when finding directories",
         "wordlist_extensions": "Specify wordlist to use when making extension lists",
         "lines": "take only the first N lines from the wordlist when finding directories",
-        "max_depth": "the maxium directory depth to attempt to solve",
+        "max_depth": "the maximum directory depth to attempt to solve",
         "version": "ffuf version",
         "extensions": "Optionally include a list of extensions to extend the keyword with (comma separated)",
         "ignore_redirects": "Explicitly ignore redirects (301,302)",
         "find_common_prefixes": "Attempt to automatically detect common prefixes and make additional ffuf runs against them",
-        "find_delimeters": "Attempt to detect common delimeters and make additional ffuf runs against them",
+        "find_delimiters": "Attempt to detect common delimiters and make additional ffuf runs against them",
     }
 
-    deps_ansible = [
-        {
-            "name": "Download ffuf",
-            "unarchive": {
-                "src": "https://github.com/ffuf/ffuf/releases/download/v#{BBOT_MODULES_FFUF_VERSION}/ffuf_#{BBOT_MODULES_FFUF_VERSION}_#{BBOT_OS_PLATFORM}_#{BBOT_CPU_ARCH}.tar.gz",
-                "include": "ffuf",
-                "dest": "#{BBOT_TOOLS}",
-                "remote_src": True,
-            },
-        }
-    ]
+    deps_common = ["ffuf"]
 
     in_scope_only = True
 
-    def setup(self):
+    async def setup(self):
+        self.proxy = self.scan.web_config.get("http_proxy", "")
         self.canary = "".join(random.choice(string.ascii_lowercase) for i in range(10))
         wordlist = self.config.get("wordlist", "")
         if not wordlist:
             wordlist = f"{self.helpers.wordlist_dir}/ffuf_shortname_candidates.txt"
         self.debug(f"Using [{wordlist}] for shortname candidate list")
-        self.wordlist = self.helpers.wordlist(wordlist)
-        f = open(self.wordlist, "r")
-        self.wordlist_lines = f.readlines()
-        f.close()
+        self.wordlist = await self.helpers.wordlist(wordlist)
+        self.wordlist_lines = self.generate_wordlist(self.wordlist)
 
         wordlist_extensions = self.config.get("wordlist_extensions", "")
         if not wordlist_extensions:
             wordlist_extensions = f"{self.helpers.wordlist_dir}/raft-small-extensions-lowercase_CLEANED.txt"
         self.debug(f"Using [{wordlist_extensions}] for shortname candidate extension list")
-        self.wordlist_extensions = self.helpers.wordlist(wordlist_extensions)
-        self.extensions = self.config.get("extensions")
+        self.wordlist_extensions = await self.helpers.wordlist(wordlist_extensions)
+
+        try:
+            self.extensions = self.helpers.chain_lists(self.config.get("extensions", ""), validate=True)
+            self.debug(f"Using custom extensions: [{','.join(self.extensions)}]")
+        except ValueError as e:
+            return False, f"Error parsing extensions: {e}"
+
         self.ignore_redirects = self.config.get("ignore_redirects")
 
         self.per_host_collection = {}
@@ -97,7 +96,7 @@ class ffuf_shortnames(ffuf):
 
     def build_extension_list(self, event):
         used_extensions = []
-        extension_hint = event.parsed.path.rsplit(".", 1)[1].lower().strip()
+        extension_hint = event.parsed_url.path.rsplit(".", 1)[1].lower().strip()
         if len(extension_hint) == 3:
             with open(self.wordlist_extensions) as f:
                 for l in f:
@@ -108,82 +107,105 @@ class ffuf_shortnames(ffuf):
         else:
             return [extension_hint]
 
-    def find_delimeter(self, hint):
-        delimeters = ["_", "-"]
-        for d in delimeters:
+    def find_delimiter(self, hint):
+        delimiters = ["_", "-"]
+        for d in delimiters:
             if d in hint:
                 if not hint.startswith(d) and not hint.endswith(d):
                     return d, hint.split(d)[0], hint.split(d)[1]
         return None
 
-    def filter_event(self, event):
+    async def filter_event(self, event):
+        if event.parent.type != "URL":
+            return False, "its parent event is not of type URL"
         return True
 
-    def handle_event(self, event):
-        if event.source.type == "URL":
-            filename_hint = re.sub(r"~\d", "", event.parsed.path.rsplit(".", 1)[0].split("/")[-1]).lower()
+    async def handle_event(self, event):
+        filename_hint = re.sub(r"~\d", "", event.parsed_url.path.rsplit(".", 1)[0].split("/")[-1]).lower()
 
-            host = f"{event.source.parsed.scheme}://{event.source.parsed.netloc}/"
-            if host not in self.per_host_collection.keys():
-                self.per_host_collection[host] = [(filename_hint, event.source.data)]
+        host = f"{event.parent.parsed_url.scheme}://{event.parent.parsed_url.netloc}/"
+        if host not in self.per_host_collection.keys():
+            self.per_host_collection[host] = [(filename_hint, event.parent.data)]
 
-            else:
-                self.per_host_collection[host].append((filename_hint, event.source.data))
+        else:
+            self.per_host_collection[host].append((filename_hint, event.parent.data))
 
-            self.shortname_to_event[filename_hint] = event
+        self.shortname_to_event[filename_hint] = event
 
-            root_stub = "/".join(event.parsed.path.split("/")[:-1])
-            root_url = f"{event.parsed.scheme}://{event.parsed.netloc}{root_stub}/"
+        root_stub = "/".join(event.parsed_url.path.split("/")[:-1])
+        root_url = f"{event.parsed_url.scheme}://{event.parsed_url.netloc}{root_stub}/"
 
+        if "shortname-file" in event.tags:
+            used_extensions = self.build_extension_list(event)
+
+        if len(filename_hint) == 6:
+            tempfile, tempfile_len = self.generate_templist(prefix=filename_hint)
+            self.verbose(
+                f"generated temp word list of size [{str(tempfile_len)}] for filename hint: [{filename_hint}]"
+            )
+
+        else:
+            tempfile = self.helpers.tempfile([filename_hint], pipe=False)
+            tempfile_len = 1
+
+        if tempfile_len > 0:
             if "shortname-file" in event.tags:
-                used_extensions = self.build_extension_list(event)
+                for ext in used_extensions:
+                    async for r in self.execute_ffuf(tempfile, root_url, suffix=f".{ext}"):
+                        await self.emit_event(
+                            r["url"],
+                            "URL_UNVERIFIED",
+                            parent=event,
+                            tags=[f"status-{r['status']}"],
+                            context=f"{{module}} brute-forced {ext.upper()} files at {root_url} and found {{event.type}}: {{event.data}}",
+                        )
 
-            if len(filename_hint) == 6:
-                tempfile, tempfile_len = self.generate_templist(prefix=filename_hint)
-                self.verbose(
-                    f"generated temp word list of size [{str(tempfile_len)}] for filename hint: [{filename_hint}]"
-                )
+            elif "shortname-directory" in event.tags:
+                async for r in self.execute_ffuf(tempfile, root_url, exts=["/"]):
+                    r_url = f"{r['url'].rstrip('/')}/"
+                    await self.emit_event(
+                        r_url,
+                        "URL_UNVERIFIED",
+                        parent=event,
+                        tags=[f"status-{r['status']}"],
+                        context=f"{{module}} brute-forced directories at {r_url} and found {{event.type}}: {{event.data}}",
+                    )
 
-            else:
-                tempfile = self.helpers.tempfile([filename_hint], pipe=False)
-                tempfile_len = 1
+        if self.config.get("find_delimiters"):
+            if "shortname-directory" in event.tags:
+                delimiter_r = self.find_delimiter(filename_hint)
+                if delimiter_r:
+                    delimiter, prefix, partial_hint = delimiter_r
+                    self.verbose(f"Detected delimiter [{delimiter}] in hint [{filename_hint}]")
+                    tempfile, tempfile_len = self.generate_templist(prefix=partial_hint)
+                    ffuf_prefix = f"{prefix}{delimiter}"
+                    async for r in self.execute_ffuf(tempfile, root_url, prefix=ffuf_prefix, exts=["/"]):
+                        await self.emit_event(
+                            r["url"],
+                            "URL_UNVERIFIED",
+                            parent=event,
+                            tags=[f"status-{r['status']}"],
+                            context=f'{{module}} brute-forced directories with detected prefix "{ffuf_prefix}" and found {{event.type}}: {{event.data}}',
+                        )
 
-            if tempfile_len > 0:
-                if "shortname-file" in event.tags:
-                    for ext in used_extensions:
-                        for r in self.execute_ffuf(tempfile, root_url, suffix=f".{ext}"):
-                            self.emit_event(r["url"], "URL_UNVERIFIED", source=event, tags=[f"status-{r['status']}"])
-
-                elif "shortname-directory" in event.tags:
-                    for r in self.execute_ffuf(tempfile, root_url, exts=["/"]):
-                        r_url = f"{r['url'].rstrip('/')}/"
-                        self.emit_event(r_url, "URL_UNVERIFIED", source=event, tags=[f"status-{r['status']}"])
-
-            if self.config.get("find_delimeters"):
-                if "shortname-directory" in event.tags:
-                    delimeter_r = self.find_delimeter(filename_hint)
-                    if delimeter_r:
-                        delimeter, prefix, partial_hint = delimeter_r
-                        self.verbose(f"Detected delimeter [{delimeter}] in hint [{filename_hint}]")
+            elif "shortname-file" in event.tags:
+                for ext in used_extensions:
+                    delimiter_r = self.find_delimiter(filename_hint)
+                    if delimiter_r:
+                        delimiter, prefix, partial_hint = delimiter_r
+                        self.verbose(f"Detected delimiter [{delimiter}] in hint [{filename_hint}]")
                         tempfile, tempfile_len = self.generate_templist(prefix=partial_hint)
-                        for r in self.execute_ffuf(tempfile, root_url, prefix=f"{prefix}{delimeter}", exts=["/"]):
-                            self.emit_event(r["url"], "URL_UNVERIFIED", source=event, tags=[f"status-{r['status']}"])
+                        ffuf_prefix = f"{prefix}{delimiter}"
+                        async for r in self.execute_ffuf(tempfile, root_url, prefix=ffuf_prefix, suffix=f".{ext}"):
+                            await self.emit_event(
+                                r["url"],
+                                "URL_UNVERIFIED",
+                                parent=event,
+                                tags=[f"status-{r['status']}"],
+                                context=f'{{module}} brute-forced {ext.upper()} files with detected prefix "{ffuf_prefix}" and found {{event.type}}: {{event.data}}',
+                            )
 
-                elif "shortname-file" in event.tags:
-                    for ext in used_extensions:
-                        delimeter_r = self.find_delimeter(filename_hint)
-                        if delimeter_r:
-                            delimeter, prefix, partial_hint = delimeter_r
-                            self.verbose(f"Detected delimeter [{delimeter}] in hint [{filename_hint}]")
-                            tempfile, tempfile_len = self.generate_templist(prefix=partial_hint)
-                            for r in self.execute_ffuf(
-                                tempfile, root_url, prefix=f"{prefix}{delimeter}", suffix=f".{ext}"
-                            ):
-                                self.emit_event(
-                                    r["url"], "URL_UNVERIFIED", source=event, tags=[f"status-{r['status']}"]
-                                )
-
-    def finish(self):
+    async def finish(self):
         if self.config.get("find_common_prefixes"):
             per_host_collection = dict(self.per_host_collection)
             self.per_host_collection.clear()
@@ -208,12 +230,13 @@ class ffuf_shortnames(ffuf):
                                         f"Running common prefix check for URL_HINT: {hint} with prefix: {prefix} and partial_hint: {partial_hint}"
                                     )
 
-                                    for r in self.execute_ffuf(tempfile, url, prefix=prefix, exts=["/"]):
-                                        self.emit_event(
+                                    async for r in self.execute_ffuf(tempfile, url, prefix=prefix, exts=["/"]):
+                                        await self.emit_event(
                                             r["url"],
                                             "URL_UNVERIFIED",
-                                            source=self.shortname_to_event[hint],
+                                            parent=self.shortname_to_event[hint],
                                             tags=[f"status-{r['status']}"],
+                                            context=f'{{module}} brute-forced directories with common prefix "{prefix}" and found {{event.type}}: {{event.data}}',
                                         )
                                 elif "shortname-file" in self.shortname_to_event[hint].tags:
                                     used_extensions = self.build_extension_list(self.shortname_to_event[hint])
@@ -222,10 +245,13 @@ class ffuf_shortnames(ffuf):
                                         self.verbose(
                                             f"Running common prefix check for URL_HINT: {hint} with prefix: {prefix}, extension: .{ext}, and partial_hint: {partial_hint}"
                                         )
-                                        for r in self.execute_ffuf(tempfile, url, prefix=prefix, suffix=f".{ext}"):
-                                            self.emit_event(
+                                        async for r in self.execute_ffuf(
+                                            tempfile, url, prefix=prefix, suffix=f".{ext}"
+                                        ):
+                                            await self.emit_event(
                                                 r["url"],
                                                 "URL_UNVERIFIED",
-                                                source=self.shortname_to_event[hint],
+                                                parent=self.shortname_to_event[hint],
                                                 tags=[f"status-{r['status']}"],
+                                                context=f'{{module}} brute-forced {ext.upper()} files with common prefix "{prefix}" and found {{event.type}}: {{event.data}}',
                                             )

@@ -1,14 +1,17 @@
-from bbot.modules.bucket_aws import bucket_aws
+from bbot.modules.templates.bucket import bucket_template
 
 
-class bucket_azure(bucket_aws):
+class bucket_azure(bucket_template):
     watched_events = ["DNS_NAME", "STORAGE_BUCKET"]
     produced_events = ["STORAGE_BUCKET", "FINDING"]
-    flags = ["active", "safe", "cloud-enum", "web-basic", "web-thorough"]
-    meta = {"description": "Check for Azure storage blobs related to target"}
-    options = {"max_threads": 10, "permutations": False}
+    flags = ["active", "safe", "cloud-enum", "web-basic"]
+    meta = {
+        "description": "Check for Azure storage blobs related to target",
+        "created_date": "2022-11-04",
+        "author": "@TheTechromancer",
+    }
+    options = {"permutations": False}
     options_desc = {
-        "max_threads": "Maximum number of threads for HTTP requests",
         "permutations": "Whether to try permutations",
     }
 
@@ -18,9 +21,16 @@ class bucket_azure(bucket_aws):
     # Dirbusting is required to know whether a bucket is public
     supports_open_check = False
 
-    def check_bucket_exists(self, bucket_name, url):
+    def build_bucket_request(self, bucket_name, base_domain, region):
+        url = self.build_url(bucket_name, base_domain, region)
         url = url.strip("/") + f"/{bucket_name}?restype=container"
-        response = self.helpers.request(url, retries=0)
+        return url, {}
+
+    def check_bucket_exists(self, bucket_name, response):
         status_code = getattr(response, "status_code", 0)
         existent_bucket = status_code != 0
-        return (existent_bucket, set())
+        return existent_bucket, set()
+
+    def clean_bucket_url(self, url):
+        # only return root URL
+        return "/".join(url.split("/")[:3])

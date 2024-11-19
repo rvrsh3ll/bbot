@@ -1,36 +1,41 @@
-from bbot.modules.shodan_dns import shodan_dns
+from bbot.modules.templates.subdomain_enum import subdomain_enum_apikey
 
 
-class passivetotal(shodan_dns):
+class passivetotal(subdomain_enum_apikey):
     watched_events = ["DNS_NAME"]
     produced_events = ["DNS_NAME"]
     flags = ["subdomain-enum", "passive", "safe"]
-    meta = {"description": "Query the PassiveTotal API for subdomains", "auth_required": True}
+    meta = {
+        "description": "Query the PassiveTotal API for subdomains",
+        "created_date": "2022-08-08",
+        "author": "@TheTechromancer",
+        "auth_required": True,
+    }
     options = {"username": "", "api_key": ""}
     options_desc = {"username": "RiskIQ Username", "api_key": "RiskIQ API Key"}
 
     base_url = "https://api.passivetotal.org/v2"
 
-    def setup(self):
+    async def setup(self):
         self.username = self.config.get("username", "")
         self.api_key = self.config.get("api_key", "")
         self.auth = (self.username, self.api_key)
-        return super().setup()
+        return await super().setup()
 
-    def ping(self):
+    async def ping(self):
         url = f"{self.base_url}/account/quota"
-        j = self.request_with_fail_count(url, auth=self.auth).json()
+        j = (await self.api_request(url, auth=self.auth)).json()
         limit = j["user"]["limits"]["search_api"]
         used = j["user"]["counts"]["search_api"]
         assert used < limit, "No quota remaining"
 
-    def abort_if(self, event):
+    async def abort_if(self, event):
         # RiskIQ is famous for their junk data
-        return super().abort_if(event) or "unresolved" in event.tags
+        return await super().abort_if(event) or "unresolved" in event.tags
 
-    def request_url(self, query):
+    async def request_url(self, query):
         url = f"{self.base_url}/enrichment/subdomains?query={self.helpers.quote(query)}"
-        return self.request_with_fail_count(url, auth=self.auth)
+        return await self.api_request(url, auth=self.auth)
 
     def parse_results(self, r, query):
         for subdomain in r.json().get("subdomains", []):

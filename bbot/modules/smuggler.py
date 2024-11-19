@@ -12,9 +12,10 @@ class smuggler(BaseModule):
     watched_events = ["URL"]
     produced_events = ["FINDING"]
     flags = ["active", "aggressive", "slow", "web-thorough"]
-    meta = {"description": "Check for HTTP smuggling"}
+    meta = {"description": "Check for HTTP smuggling", "created_date": "2022-07-06", "author": "@liquidsec"}
 
     in_scope_only = True
+    per_hostport_only = True
 
     deps_ansible = [
         {
@@ -23,19 +24,7 @@ class smuggler(BaseModule):
         }
     ]
 
-    def setup(self):
-        self.scanned_hosts = set()
-        return True
-
-    def handle_event(self, event):
-        host = f"{event.parsed.scheme}://{event.parsed.netloc}/"
-        host_hash = hash(host)
-        if host_hash in self.scanned_hosts:
-            self.debug(f"Host {host} was already scanned, exiting")
-            return
-        else:
-            self.scanned_hosts.add(host_hash)
-
+    async def handle_event(self, event):
         command = [
             sys.executable,
             f"{self.scan.helpers.tools_dir}/smuggler/smuggler.py",
@@ -44,11 +33,15 @@ class smuggler(BaseModule):
             "-u",
             event.data,
         ]
-        for f in self.helpers.run_live(command):
-            if "Issue Found" in f:
-                technique = f.split(":")[0].rstrip()
-                text = f.split(":")[1].split("-")[0].strip()
-                description = f"[HTTP SMUGGLER] [{text}] Technique: {technique}"
-                self.emit_event(
-                    {"host": str(event.host), "url": event.data, "description": description}, "FINDING", source=event
-                )
+        async for line in self.run_process_live(command):
+            for f in line.split("\r"):
+                if "Issue Found" in f:
+                    technique = f.split(":")[0].rstrip()
+                    text = f.split(":")[1].split("-")[0].strip()
+                    description = f"[HTTP SMUGGLER] [{text}] Technique: {technique}"
+                    await self.emit_event(
+                        {"host": str(event.host), "url": event.data, "description": description},
+                        "FINDING",
+                        parent=event,
+                        context=f"{{module}} scanned {event.data} and found HTTP smuggling ({{event.type}}): {text}",
+                    )

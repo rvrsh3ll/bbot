@@ -7,8 +7,12 @@ from .base import BaseModule
 class secretsdb(BaseModule):
     watched_events = ["HTTP_RESPONSE"]
     produced_events = ["FINDING"]
-    flags = ["active", "safe", "web-basic", "web-thorough"]
-    meta = {"description": "Detect common secrets with secrets-patterns-db"}
+    flags = ["active", "safe", "web-basic"]
+    meta = {
+        "description": "Detect common secrets with secrets-patterns-db",
+        "created_date": "2023-03-17",
+        "author": "@TheTechromancer",
+    }
     options = {
         "min_confidence": 99,
         "signatures": "https://raw.githubusercontent.com/blacklanternsecurity/secrets-patterns-db/master/db/rules-stable.yml",
@@ -18,11 +22,13 @@ class secretsdb(BaseModule):
         "signatures": "File path or URL to YAML signatures",
     }
     deps_pip = ["pyyaml~=6.0"]
+    # accept any HTTP_RESPONSE including out-of-scope ones (such as from github_codesearch)
+    scope_distance_modifier = 3
 
-    def setup(self):
+    async def setup(self):
         self.rules = []
         self.min_confidence = self.config.get("min_confidence", 99)
-        self.sig_file = self.helpers.wordlist(self.config.get("signatures", ""))
+        self.sig_file = await self.helpers.wordlist(self.config.get("signatures", ""))
         with open(self.sig_file) as f:
             rules_yaml = yaml.safe_load(f).get("patterns", [])
         for r in rules_yaml:
@@ -41,9 +47,26 @@ class secretsdb(BaseModule):
                     self.debug(f"Error compiling regex: r'{regex}'")
         return True
 
-    def handle_event(self, event):
+    async def handle_event(self, event):
         resp_body = event.data.get("body", "")
         resp_headers = event.data.get("raw_header", "")
+        all_matches = await self.helpers.run_in_executor(self.search_data, resp_body, resp_headers)
+        for matches, name in all_matches:
+            matches = [m.string[m.start() : m.end()] for m in matches]
+            description = f"Possible secret ({name}): {matches}"
+            event_data = {"host": str(event.host), "description": description}
+            parsed_url = getattr(event, "parsed_url", None)
+            if parsed_url:
+                event_data["url"] = parsed_url.geturl()
+            await self.emit_event(
+                event_data,
+                "FINDING",
+                parent=event,
+                context=f"{{module}} searched HTTP response and found {{event.type}}: {description}",
+            )
+
+    def search_data(self, resp_body, resp_headers):
+        all_matches = []
         for r in self.rules:
             regex = r["regex"]
             name = r["name"]
@@ -51,14 +74,5 @@ class secretsdb(BaseModule):
                 if text:
                     matches = list(regex.finditer(text))
                     if matches:
-                        matches = [m.string[m.start() : m.end()] for m in matches]
-                        description = f"Possible secret ({name}): {matches}"
-                        event_data = {"host": str(event.host), "description": description}
-                        parsed_url = getattr(event, "parsed", None)
-                        if parsed_url:
-                            event_data["url"] = parsed_url.geturl()
-                        self.emit_event(
-                            event_data,
-                            "FINDING",
-                            source=event,
-                        )
+                        all_matches.append((matches, name))
+        return all_matches

@@ -1,7 +1,7 @@
-from bbot.modules.shodan_dns import shodan_dns
+from bbot.modules.templates.subdomain_enum import subdomain_enum_apikey
 
 
-class bevigil(shodan_dns):
+class bevigil(subdomain_enum_apikey):
     """
     Retrieve OSINT data from mobile applications using BeVigil
     """
@@ -9,41 +9,56 @@ class bevigil(shodan_dns):
     watched_events = ["DNS_NAME"]
     produced_events = ["DNS_NAME", "URL_UNVERIFIED"]
     flags = ["subdomain-enum", "passive", "safe"]
-    meta = {"description": "Retrieve OSINT data from mobile applications using BeVigil", "auth_required": True}
+    meta = {
+        "description": "Retrieve OSINT data from mobile applications using BeVigil",
+        "created_date": "2022-10-26",
+        "author": "@alt-glitch",
+        "auth_required": True,
+    }
     options = {"api_key": "", "urls": False}
     options_desc = {"api_key": "BeVigil OSINT API Key", "urls": "Emit URLs in addition to DNS_NAMEs"}
 
     base_url = "https://osint.bevigil.com/api"
 
-    def setup(self):
+    async def setup(self):
         self.api_key = self.config.get("api_key", "")
-        self.headers = {"X-Access-Token": self.api_key}
         self.urls = self.config.get("urls", False)
-        return super().setup()
+        return await super().setup()
 
-    def ping(self):
-        pass
+    def prepare_api_request(self, url, kwargs):
+        kwargs["headers"]["X-Access-Token"] = self.api_key
+        return url, kwargs
 
-    def handle_event(self, event):
+    async def handle_event(self, event):
         query = self.make_query(event)
-        subdomains = self.query(query, request_fn=self.request_subdomains, parse_fn=self.parse_subdomains)
+        subdomains = await self.query(query, request_fn=self.request_subdomains, parse_fn=self.parse_subdomains)
         if subdomains:
             for subdomain in subdomains:
-                self.emit_event(subdomain, "DNS_NAME", source=event)
+                await self.emit_event(
+                    subdomain,
+                    "DNS_NAME",
+                    parent=event,
+                    context=f'{{module}} queried BeVigil\'s API for "{query}" and discovered {{event.type}}: {{event.data}}',
+                )
 
         if self.urls:
-            urls = self.query(query, request_fn=self.request_urls, parse_fn=self.parse_urls)
+            urls = await self.query(query, request_fn=self.request_urls, parse_fn=self.parse_urls)
             if urls:
-                for parsed_url in self.helpers.collapse_urls(urls):
-                    self.emit_event(parsed_url.geturl(), "URL_UNVERIFIED", source=event)
+                for parsed_url in await self.helpers.run_in_executor_mp(self.helpers.validators.collapse_urls, urls):
+                    await self.emit_event(
+                        parsed_url.geturl(),
+                        "URL_UNVERIFIED",
+                        parent=event,
+                        context=f'{{module}} queried BeVigil\'s API for "{query}" and discovered {{event.type}}: {{event.data}}',
+                    )
 
-    def request_subdomains(self, query):
+    async def request_subdomains(self, query):
         url = f"{self.base_url}/{self.helpers.quote(query)}/subdomains/"
-        return self.request_with_fail_count(url, headers=self.headers)
+        return await self.api_request(url)
 
-    def request_urls(self, query):
+    async def request_urls(self, query):
         url = f"{self.base_url}/{self.helpers.quote(query)}/urls/"
-        return self.request_with_fail_count(url, headers=self.headers)
+        return await self.api_request(url)
 
     def parse_subdomains(self, r, query=None):
         results = set()
